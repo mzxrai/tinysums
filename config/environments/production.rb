@@ -86,4 +86,13 @@ Rails.application.configure do
   #
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  # Use schema cache dump for faster database operations
+  config.use_schema_cache_dump = true
+
+  # Do not raise an error if there are pending migrations.
+  config.active_record.migration_error = false
+
+  # Replace the default in-process and non-durable queuing backend for Active Job.
+  config.active_job.queue_adapter = :sidekiq
 end
