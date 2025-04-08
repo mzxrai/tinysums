@@ -1,3 +1,7 @@
 my_hard_job:
   cron: "* * * * *"
   class: "HardJob"
+
+hacker_news_fetcher_job:
+  cron: "*/30 * * * *"
+  class: "HackerNewsFetcherJob"
