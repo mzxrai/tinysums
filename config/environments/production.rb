@@ -95,4 +95,10 @@ Rails.application.configure do
 
   # Replace the default in-process and non-durable queuing backend for Active Job.
   config.active_job.queue_adapter = :sidekiq
+
+  # Configure basic auth for the Sidekiq Web UI
+  Sidekiq::Web.use Rack::Auth::Basic do |username, password|
+    ActiveSupport::SecurityUtils.secure_compare("sidekiq", username) &
+      ActiveSupport::SecurityUtils.secure_compare(ENV.fetch("SIDEKIQ_WEB_UI_PW"), password)
+  end
 end

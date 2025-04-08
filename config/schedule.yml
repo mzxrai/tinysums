@@ -1,0 +1,3 @@
+my_hard_job:
+  cron: "* * * * *"
+  class: "HardJob"
