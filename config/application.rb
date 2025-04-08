@@ -1,6 +1,7 @@
 require_relative "boot"
 
 require "rails/all"
+require "sidekiq/web"
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
@@ -23,5 +24,26 @@ module Hnsum
     #
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
+
+    # Configure generators to use RSpec instead of Minitest
+    config.generators do |g|
+      g.test_framework :rspec,
+                        fixtures: true,
+                        model_specs: true,
+                        view_specs: false,
+                        helper_specs: false,
+                        routing_specs: false,
+                        controller_specs: true,
+                        request_specs: true
+      g.fixture_replacement :factory_bot, dir: "spec/factories"
+      g.test_unit false
+      g.system_tests false
+    end
+
+    # Configure basic auth for the Sidekiq Web UI
+    Sidekiq::Web.use Rack::Auth::Basic do |username, password|
+      ActiveSupport::SecurityUtils.secure_compare("sidekiq", username) &
+        ActiveSupport::SecurityUtils.secure_compare(ENV.fetch("SIDEKIQ_WEB_UI_PW"), password)
+    end
   end
 end

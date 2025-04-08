@@ -12,10 +12,28 @@ gem "puma", ">= 5.0"
 gem "jsbundling-rails"
 # Bundle and process CSS [https://github.com/rails/cssbundling-rails]
 gem "cssbundling-rails"
+# Use Redis for fast in-memory storage
+gem "redis", "~> 5.4"
+# Connection pooler
+gem "connection_pool", "~> 2.5" 
+# Sidekiq for background jobs
+gem "sidekiq", "~> 8.0"
+# Sidekiq cron jobs
+gem "sidekiq-cron", "~> 2.2"
+# Faster JSON parser/serializer
+gem "oj", "~> 3.16"
+# Common interface to mutiple JSON libraries
+gem "multi_json", "~> 1.15"
+# Authorization
+gem "pundit", "~> 2.5"
+# HTTP request handling
+gem "faraday", "~> 2.12"
+# ActiveStorage validations
+gem "active_storage_validations", "~> 2.0"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
-gem "jbuilder"
-# Use Redis adapter to run Action Cable in production
-# gem "redis", ">= 4.0.1"
+gem "jbuilder", "~> 2.13"
+# Email validator
+gem "email_validator", "~> 2.2"
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"
@@ -40,13 +58,27 @@ group :development, :test do
   gem "rubocop-rails-omakase", require: false
 end
 
+# Gems for development environment
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
 end
 
+# Gems for the test environment only
 group :test do
-  # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
-  gem "capybara"
-  gem "selenium-webdriver"
+    # Testing framework for Rails
+  gem "rspec-rails", "~> 7.1"
+  
+  # Factory Bot for test data
+  gem "factory_bot_rails", "~> 6.4"
+  
+  # Faker for generating realistic test data
+  gem "faker", "~> 3.5"
+
+  # Testing helpers
+  gem "shoulda-matchers", "~> 6.0"
+end
+
+# Gems for development and test environments
+group :development, :test do
 end

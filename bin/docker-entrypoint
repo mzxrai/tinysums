@@ -6,9 +6,38 @@ if [ -z "${LD_PRELOAD+x}" ]; then
     export LD_PRELOAD
 fi
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
-  ./bin/rails db:prepare
-fi
+# Set config-related environment variables
+export RAILS_ENV="production"
+export RAILS_LOG_TO_STDOUT="true"
+# export API_URL="https://ipa.premva.com"
+# export FRONTEND_URL="https://app.premva.com"
+# export COOKIE_DOMAIN=".premva.com"
+# export DB_PRIMARY_HOST="10.124.16.5"
+# export GITHUB_CLIENT_ID="Ov23liSBAwSUjiKmpzUP"
+# export RAILS_MAX_THREADS=5
+# export GCP_PROJECT_ID="rails-api-premva"
+# export GCP_STORAGE_BUCKET="rails-api-company-files"
 
-exec "${@}"
+# Store the first argument (command) and shift it off the argument list
+COMMAND="$1"
+shift
+
+# If we're in web server (request handling) mode
+if [ "$COMMAND" = "web" ]; then
+  # Prepare the database and dump the schema cache
+  ./bin/rails db:prepare
+  ./bin/rails db:schema:cache:dump
+  
+  # Start the web server with any additional arguments passed through
+  exec ./bin/rails server "$@"
+# If we're in worker mode (for background processing)
+elif [ "$COMMAND" = "worker" ]; then
+  # Set the concurrency higher for Sidekiq  
+  export RAILS_MAX_THREADS=20
+
+  # Start Sidekiq with any additional arguments passed through
+  exec bundle exec sidekiq "$@"
+# For any other command, just execute it directly with all arguments
+else
+  exec "$COMMAND" "$@"
+fi
