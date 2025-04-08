@@ -16,13 +16,7 @@
 
 ### Project description
 
-This is a Rails 8.0 API-only backend for a static frontend (note: frontend is in separate repo) used by technical startup founders to create "flows," which you can think of as forms they embed on their websites for lead generation.
-
-This project solely contains the Rails API backend, which will be used by the static Next.JS frontend for all business logic, data retrieval and manipulation, authentication, etc.
-
-### Names to know
-
-Our company name is "Premva," and we refer to our app by the same name - Premva.
+This is a Rails 8.0 app that generates summaries of Hacker News articles and provides related features to a technical developer audience.
 
 ## Instructions for making edits (must be followed)
 
@@ -33,12 +27,6 @@ Our company name is "Premva," and we refer to our app by the same name - Premva.
 1. Write code that is well-structured and that will pass code review by our highly detailed principal engineer.
 1. If you wish to use third-party libraries in your code, use the **latest available** version. Don't write code against old libraries that are no longer supported. Prompt me if you have any questions about this.
 1. Add extra newlines when writing code to make code easier to read where appropriate. Don't cluster too many lines of dense code together; create some breathing room.
-1. When working in this codebase:
-
-    * All API endpoints must be documented using RSpec + rswag following the OpenAPI 3.1.1 specification.
-    * Place new API controllers in app/controllers/api/v1/
-    * Every endpoint must include description, parameters, request/response schemas, examples, and error responses
-
 1. When creating new Jbuilder views for a given data model, create a partial with the base data format, and use that in your index/show/etc. views. Before you create a new "index" Jbuilder view, consult one of our existing Jbuilder index views to see how to structure it.
 1. Do not end files with a blank line.
 1. Use double quotes for strings when possible.
@@ -61,38 +49,26 @@ If you have any questions about this policy, simple ask me. Err on the side of a
 ### Core Principles
 
 1. **Avoid Duplication**: Tests should have clear purpose without excessive overlap
-1. **Documentation as Tests**: RSwag specs serve dual purpose of documentation and testing
-1. **Focused Testing**: Only add specialized tests for complex logic not covered by RSwag
+1. **Focused Testing**: Tests should be meaningful and focused on a single purpose
 1. **Security First**: Always thoroughly test authorization and authentication
 
 ### Test Types
 
-#### RSwag Documentation/Test Specs
-
-* **Primary test type for all standard API endpoints**
-* **Location**: `spec/requests/api/v1/**/*_spec.rb`
-* **Purpose**:
-  * Generate Swagger API documentation
-  * Test basic CRUD functionality
-  * Verify standard authorization/authentication cases
-  * Validate request/response schemas
-  * Create a schema file for each new domain model under spec/support/api_documentation/schemas/. Then, reference those schemas in your specs.
-
 #### Controller-Specific Request Specs
 
 * **Focus on authorization, edge cases, and complex logic**
-* **Location**: `spec/requests/api/v1/**/*_controller_spec.rb`
+* **Location**: `spec/controllers/*_controller_spec.rb`
 * **When to use**:
+  * To test complex business logic in controllers
   * To test authorization edge cases
   * To verify policy integration
-  * To test complex business logic in controllers
   * For advanced query parameters
   * For pagination/filtering logic
 
 #### Policy Tests
 
 * **Required for all policy classes**
-* **Location**: `spec/policies/**/*_policy_spec.rb`
+* **Location**: `spec/policies/*_policy_spec.rb`
 * **Purpose**:
   * Test authorization rules
   * Verify scopes work correctly
@@ -100,27 +76,15 @@ If you have any questions about this policy, simple ask me. Err on the side of a
 
 #### General Guidelines
 
-1. **Start with RSwag**: For all API endpoints, begin with RSwag specs for documentation and basic functionality
-1. **Add Focused Controller Specs**: For authorization edge cases and policy integration
-1. **Keep Policy Tests Separate**: Always maintain dedicated policy tests
+1. **Start with Model Specs**
+1. **Add Focused Controller Specs**
+1. **Add Policy Tests When Appropriate**
 
 #### Authorization Testing Strategy
 
 For testing authorization, we use a layered approach:
 
 1. **Policy Specs**: Test the fundamental authorization rules
-1. **RSwag Specs**: Test common authorization cases (authenticated vs. unauthenticated, authorized vs. unauthorized)
-1. **Controller Specs**: Test authorization edge cases (e.g., user leaving a company, policy scope verification)
-
-#### Example Decision Process
-
-For a standard resource:
-
-1. Create RSwag specs for all endpoints and basic authorization scenarios
-1. Create dedicated policy specs for all authorization rules
-1. Add focused controller specs for:
-   * Verifying policy scope is correctly applied
-   * Testing the verify_authorized enforcement
-   * Testing edge cases like changing permissions
+1. **Controller Specs**: Test authorization edge cases
 
 By following this approach, we maintain comprehensive test coverage while avoiding redundant tests that slow down the test suite.
