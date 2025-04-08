@@ -30,6 +30,8 @@ This is a Rails 8.0 app that generates summaries of Hacker News articles and pro
 1. When creating new Jbuilder views for a given data model, create a partial with the base data format, and use that in your index/show/etc. views. Before you create a new "index" Jbuilder view, consult one of our existing Jbuilder index views to see how to structure it.
 1. Do not end files with a blank line.
 1. Use double quotes for strings when possible.
+1. When you are writing CSS, follow modern web standards whenever possible: relative units, modern syntax, etc. Use Tailwind! We are already set up for Tailwind in this Rails project.
+1. When you are writing TypeScript, follow modern web standards whenever possible. Always prefer writing TypeScript to untyped JavaScript.
 
 ### Instruction summary
 
