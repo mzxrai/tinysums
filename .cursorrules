@@ -16,7 +16,7 @@
 
 ### Project description
 
-This is a Rails 8.0 app that generates summaries of Hacker News articles and provides related features to a technical developer audience.
+This is a Rails 8.0 app that generates summaries of Hacker News articles and provides related features to a technical developer audience. It has a React frontend embedded under app/javascript and uses Rails as an API backend for the React app. It may also use standard Rails controller actions and ERB views for some pages that don't require highly dynamic interaction.
 
 ## Instructions for making edits (must be followed)
 
