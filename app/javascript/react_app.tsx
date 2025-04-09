@@ -1,56 +1,34 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { StoryList } from './components/StoryList';
-import { ClickCounter } from './components/ClickCounter';
-import { HackerNewsStory } from './types/HackerNews';
+import App from './App';
+
+// Define the ID of the root DOM element where the React app will be mounted
+const ROOT_ELEMENT_ID = 'react-root';
 
 /**
- * App component that wraps our StoryList and includes the ClickCounter
- */
-const App: React.FC<{ stories: HackerNewsStory[] }> = ({ stories }) => {
-  return (
-    <>
-      <StoryList stories={stories} />
-      <ClickCounter />
-    </>
-  );
-};
-
-/**
- * Main entry point for the React application
- * This function looks for a data element in the DOM with the stories data
- * and renders the App component with that data
+ * @description Main entry point for the React SPA.
+ * Finds the root DOM element and renders the main App component into it.
  */
 document.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('react-root');
+  // Find the container element in the HTML using its ID
+  const container = document.getElementById(ROOT_ELEMENT_ID);
 
-  // If there's no container, don't try to render
-  if (!container) return;
-
-  // Get the stories data from the data attribute
-  const storiesDataElement = document.getElementById('stories-data');
-
-  if (!storiesDataElement) {
-    console.error('Stories data element not found');
-    return;
-  }
-
-  // Parse the stories data from the data attribute
-  const storiesJson = storiesDataElement.getAttribute('data-stories');
-
-  if (!storiesJson) {
-    console.error('No stories data found');
-    return;
-  }
-
-  try {
-    // Parse the JSON data
-    const stories = JSON.parse(storiesJson) as HackerNewsStory[];
-
-    // Create the React root and render the app
+  // Ensure the container element exists before attempting to render
+  if (container) {
+    // Create a React root attached to the container element
     const root = createRoot(container);
-    root.render(<App stories={stories} />);
-  } catch (e) {
-    console.error('Error parsing stories data:', e);
+    // Render the top-level App component
+    // The App component will manage the rest of the application structure and routing
+    root.render(
+      // StrictMode is a tool for highlighting potential problems in an application.
+      // It activates additional checks and warnings for its descendants.
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+    // If the container element is not found in the DOM
+  } else {
+    // Log an error to the console to help with debugging
+    console.error(`React root element with ID '${ROOT_ELEMENT_ID}' not found.`);
   }
 }); 

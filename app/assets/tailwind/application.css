@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Define data-theme attribute selector for dark mode */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* You can add any custom CSS below if needed */

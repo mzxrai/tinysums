@@ -18,4 +18,8 @@ export interface HackerNewsStory {
   descendants: number;
   /** Type of the item (usually "story") */
   type: string;
+  /** AI-generated summary of the story content (optional) */
+  contentSummary?: string;
+  /** AI-generated summary of the story's comment section (optional) */
+  commentSummary?: string;
 } 
