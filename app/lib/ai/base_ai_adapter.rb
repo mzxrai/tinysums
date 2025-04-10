@@ -28,6 +28,20 @@ class Ai::BaseAiAdapter
     def max_output_tokens
       raise NotImplementedError, "#{self.class.name} must implement #max_output_tokens"
     end
+
+    # Default completion options for the model
+    # Override in subclasses to provide model-specific values
+    # @return [Hash] default completion options for the model
+    def default_completion_options
+      raise NotImplementedError, "#{self.class.name} must implement #default_completion_options"
+    end
+  end
+
+  # Initialize the Anthropic adapter
+  # @param options [Hash] Configuration options for the adapter
+  def initialize(options = {})
+    @options = self.class.default_completion_options.merge(options)
+    @connection = create_connection
   end
 
   # Generate a summary of the provided content
@@ -39,7 +53,7 @@ class Ai::BaseAiAdapter
     # Default implementation delegates to complete
     # Subclasses can override with provider-specific implementation if needed
     system_prompt = options[:system_prompt] || ""
-    complete(system_prompt, content, options)
+    complete(system_prompt, content)
   end
 
   # Generate a summary of the provided comments
@@ -78,12 +92,10 @@ class Ai::BaseAiAdapter
   # Generic completion method for Claude
   # @param system_prompt [String] system instructions
   # @param user_prompt [String] user message/question
-  # @param options [Hash] additional options for completion
   # @return [String] the generated text
-  def complete(system_prompt, user_prompt, options = {})
-    opts = @options.merge(options)
-    Rails.logger.info("Calling API for #{opts[:model]}")
-    call_api(system_prompt, user_prompt, opts)
+  def complete(system_prompt, user_prompt)
+    Rails.logger.info("Calling API for #{@options[:model]}")
+    call_api(system_prompt, user_prompt)
   end
 
   # Get the API key from environment variables

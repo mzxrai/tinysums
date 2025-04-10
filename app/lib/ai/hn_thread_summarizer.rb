@@ -35,10 +35,13 @@ class Ai::HnThreadSummarizer
   def initialize(adapter, hn_client = nil, options = {})
     # Save the AI adapter for making summarization requests
     @adapter = adapter
+
     # Create or use provided HN API client
     @hn_client = hn_client || HnApiClient.new
+
     # Merge default options with provided options
     @options = DEFAULT_OPTIONS.merge(options)
+
     # Initialize cache for summaries
     @summary_cache = {}
   end
@@ -514,44 +517,38 @@ class Ai::HnThreadSummarizer
 
       ### Guidelines
 
+      - Write in a conversational tone; remember, you're writing to a close software developer friend whose attention
+        you want to keep.
       - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim**; do not truncate
         them in any way (if you do; they won't work!).
       - Cite particularly interesting comments by specific usernames where possible. When referencing usernames, format
         them using backticks, like this: `username`. If you choose to reference specific comments, which is recommended,
         do not reference them by their index (e.g., "1.2.1"), but rather simply use the author's username (e.g, "`mbm`
-        suggested that...").
-      - Do not use foul language or be overtly opinionated when generating your summary.
-      - Write in a conversational tone.
-      - Your primary goals are to be insightful and highly readable. Maximize engagement with the reader and provide
-        fast value.
+        thinks that...").
 
       ### What to avoid doing
 
       - Avoid pandering or folksy language.
       - Avoid stuffiness or formality.
       - Do not make things up.
+      - Do not use foul language.
 
       ### Summary format
 
-      Return your summary in *well-formatted, valid Markdown*. Do not include a descriptive intro such as
-      "Here is a summary of the discussion..."; instead, simply return the summary itself. Immediately produce value
-      for the reader.
-
-      ### Summary audience & style
-
-      The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
-      appeal to that audience. Think less "stodgy newscaster" and more "engaging Twitter post by brilliant dev".
+      Return your summary in *valid Markdown*. Do not include a descriptive intro such as "Here is a summary of the
+      discussion..."; instead, simply return the summary itself.
     INSTRUCTIONS
 
     # Construct the full prompt with instructions and content
     a = <<~PROMPT
       # Task
 
-      You are an expert Hacker News commentator.
+      You are an expert Hacker News commentator, writing a summary of a recent thread for a software developer friend
+      of yours. Your goal is to create a concise yet surprisingly specific and technically nuanced summary of the
+      below-provided Hacker News discussion thread, which is about this story - "#{story['title']}".
 
-      In a software developer-targeted conversational tone, create a concise yet surprisingly detailed and technically
-      nuanced summary of this Hacker News discussion (comment) thread. If the topic is a controversial one, you may
-      choose to make your summary somewhat edgy; but, remain factual and unbiased.
+      If the topic is a controversial one, you may choose to make your summary somewhat edgy; but, remain factual and
+      unbiased.
 
       #{instructions}
 
