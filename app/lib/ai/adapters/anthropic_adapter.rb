@@ -6,11 +6,9 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
     thinking: {
       type: "enabled",                   # Enable thinking by default
       budget_tokens: 4096                # Default thinking token budget
-    }
+    },
+    max_tokens: 20000
   }.freeze
-
-  # Base URL for the Anthropic API
-  BASE_URL = "https://api.anthropic.com/v1".freeze
 
   # API version
   API_VERSION = "2023-06-01"
@@ -22,6 +20,18 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
     def context_window_size
       200000
     end
+
+    # Maximum output tokens for the model
+    # @return [Integer] maximum output tokens for this model
+    def max_output_tokens
+      DEFAULT_COMPLETION_OPTIONS[:max_tokens]
+    end
+
+    # Base URL for the API
+    # @return [String] base URL for the API
+    def base_url
+      "https://api.anthropic.com/v1".freeze
+    end
   end
 
   # Initialize the Anthropic adapter
@@ -31,28 +41,7 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
     @connection = create_connection
   end
 
-  # Generic completion method for Claude
-  # @param system_prompt [String] system instructions
-  # @param user_prompt [String] user message/question
-  # @param options [Hash] additional options for completion
-  # @return [String] the generated text
-  def complete(system_prompt, user_prompt, options = {})
-    opts = @options.merge(options)
-    Rails.logger.info("Calling Claude API (#{opts[:model]})")
-    call_api(system_prompt, user_prompt, opts)
-  end
-
   private
-
-  # Create a Faraday connection
-  # @return [Faraday::Connection] Faraday connection object
-  def create_connection
-    Faraday.new(url: BASE_URL) do |conn|
-      conn.request :json
-      conn.response :json
-      conn.adapter Faraday.default_adapter
-    end
-  end
 
   # Get the API key from environment variables
   # @return [String] the Anthropic API key
@@ -72,8 +61,7 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
       system: system_prompt,
       messages: [
         { role: "user", content: user_prompt }
-      ],
-      max_tokens: RESERVED_OUTPUT_TOKENS
+      ]
     )
 
     begin
@@ -88,8 +76,13 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
 
       # Process the response
       if response.success?
-        # Extract the generated text from the response
-        response.body.dig("content", 0, "text")
+        # Find the text content in the response
+        # Anthropic responses contain an array of content objects
+        # We need to find the one with type: "text"
+        text_content = response.body["content"].find { |item| item["type"] == "text" }
+
+        # Extract the text from the content object
+        text_content ? text_content["text"] : nil
       else
         # Handle API error - raise an exception instead of returning an error message
         error_message = response.body["error"]["message"] rescue "Unknown error (HTTP #{response.status})"

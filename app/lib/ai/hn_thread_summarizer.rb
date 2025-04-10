@@ -356,7 +356,7 @@ class Ai::HnThreadSummarizer
     # Format each comment and its replies, with incrementing indices
     comments_text = selected_comments.map.with_index do |comment, index|
       format_comment_with_replies(comment, "#{index + 1}", 0)
-    end.join("\n\n")
+    end.join("\n")
 
     # Combine header and comments
     header + comments_text
@@ -387,7 +387,7 @@ class Ai::HnThreadSummarizer
 
     # Create a clear heading that includes the hierarchical index
     # Format: "## [1] Comment by username (depth 0)"
-    comment_text = "#{heading_level} [#{index}] (depth #{depth})\n\n#{formatted_text}"
+    comment_text = "#{heading_level} [#{index}] (depth #{depth})\n#{formatted_text}"
 
     # Format replies if any and if we haven't reached max depth
     if comment["replies"] && !comment["replies"].empty? && depth < max_depth
@@ -399,15 +399,15 @@ class Ai::HnThreadSummarizer
       replies_text = sorted_replies.map.with_index do |scored_reply, i|
         reply = scored_reply[:comment]
         format_comment_with_replies(reply, "#{index}.#{i + 1}", depth + 1)
-      end.join("\n\n")
+      end.join("\n")
 
       # Combine comment and its replies
-      comment_text + "\n\n" + replies_text
+      comment_text + "\n" + replies_text
     else
       # Just return the comment text if no replies or max depth reached
       if comment["replies"] && !comment["replies"].empty? && depth >= max_depth
         # Add a note that deeper replies exist but were truncated
-        depth_limit_note = "\n\n[DEPTH LIMIT REACHED: #{comment["replies"].size} additional replies not shown]"
+        depth_limit_note = "\n[DEPTH LIMIT REACHED: #{comment["replies"].size} additional replies not shown]"
         comment_text + depth_limit_note
       else
         # No replies or empty replies

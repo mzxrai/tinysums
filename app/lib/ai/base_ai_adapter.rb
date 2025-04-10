@@ -6,10 +6,6 @@ class Ai::BaseAiAdapter
   # 1 token is roughly 0.25 characters (or 4 chars per token)
   TOKEN_PER_CHAR_RATIO = 0.25
 
-  # Reserved tokens for output generation across all models
-  # This ensures we always leave enough space for the generated output
-  RESERVED_OUTPUT_TOKENS = 20000
-
   # Class methods for adapter-specific configuration
   class << self
     # Maximum token limit for the model (input + output)
@@ -17,6 +13,20 @@ class Ai::BaseAiAdapter
     # @return [Integer] maximum token limit for this model
     def context_window_size
       128000 # Default value
+    end
+
+    # Base URL for the API
+    # Override in subclasses to provide model-specific values
+    # @return [String] base URL for the API
+    def base_url
+      raise NotImplementedError, "#{self.class.name} must implement #base_url"
+    end
+
+    # Maximum output tokens for the model
+    # Override in subclasses to provide model-specific values
+    # @return [Integer] maximum output tokens for this model
+    def max_output_tokens
+      raise NotImplementedError, "#{self.class.name} must implement #max_output_tokens"
     end
   end
 
@@ -47,7 +57,7 @@ class Ai::BaseAiAdapter
   # @return [Integer] maximum input size in characters
   def max_input_chars
     # Calculate how many tokens we can use for input
-    max_input_tokens = self.class.context_window_size - RESERVED_OUTPUT_TOKENS
+    max_input_tokens = self.class.context_window_size - self.class.max_output_tokens
 
     # Convert to characters using the fixed ratio
     (max_input_tokens / TOKEN_PER_CHAR_RATIO).floor
@@ -55,14 +65,25 @@ class Ai::BaseAiAdapter
 
   private
 
-  # Generic completion method that all LLM providers support in some form
-  # Subclasses must implement this method
+  # Create a Faraday connection
+  # @return [Faraday::Connection] Faraday connection object
+  def create_connection
+    Faraday.new(url: self.class.base_url) do |conn|
+      conn.request :json
+      conn.response :json
+      conn.adapter Faraday.default_adapter
+    end
+  end
+
+  # Generic completion method for Claude
   # @param system_prompt [String] system instructions
   # @param user_prompt [String] user message/question
   # @param options [Hash] additional options for completion
   # @return [String] the generated text
   def complete(system_prompt, user_prompt, options = {})
-    raise NotImplementedError, "#{self.class.name} must implement #complete"
+    opts = @options.merge(options)
+    Rails.logger.info("Calling API for #{opts[:model]}")
+    call_api(system_prompt, user_prompt, opts)
   end
 
   # Get the API key from environment variables
