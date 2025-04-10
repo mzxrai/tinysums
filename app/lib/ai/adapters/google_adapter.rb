@@ -8,6 +8,15 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
   # Base URL for the Google Generative Language API
   BASE_URL = "https://generativelanguage.googleapis.com/v1beta".freeze
 
+  # Class methods for adapter-specific configuration
+  class << self
+    # Maximum token limit for the model (input + output)
+    # @return [Integer] maximum token limit for this model
+    def max_token_limit
+      1000000 # Gemini Pro 2.5 has a 1M token context window
+    end
+  end
+
   # Initialize the Google adapter
   # @param api_key [String] The Google API key
   # @param options [Hash] Configuration options for the adapter
@@ -15,18 +24,6 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
     @api_key = api_key
     @options = DEFAULT_OPTIONS.merge(options)
     @connection = create_connection
-  end
-
-  # Returns model-specific context window limits for Gemini models
-  # @return [Hash] context window information
-  def context_window_info
-    {
-      # Gemini Pro 2.5 has a 1M token context window
-      max_token_limit: 1000000,
-
-      # Optimal chunk size (very large due to Gemini's massive context window)
-      optimal_chunk_size: 800000
-    }
   end
 
   # Generate a summary of the provided content

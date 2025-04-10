@@ -22,7 +22,7 @@ class Ai::HnThreadSummarizer
     content_weight: 0.2,    # Weight for content characteristics
 
     # Comment format template (can be customized)
-    comment_format: "# Comment by %{username} (karma: %{karma})\n%{text}\n\n",
+    comment_format: "Comment by %{username} (karma: %{karma})\n%{text}\n\n",
 
     # Enable caching of summaries
     cache_summaries: true
@@ -356,7 +356,7 @@ class Ai::HnThreadSummarizer
     # Format each comment and its replies, with incrementing indices
     comments_text = selected_comments.map.with_index do |comment, index|
       format_comment_with_replies(comment, "#{index + 1}", 0)
-    end.join("\n")
+    end.join("\n\n")
 
     # Combine header and comments
     header + comments_text
@@ -374,18 +374,20 @@ class Ai::HnThreadSummarizer
     # Maximum depth is 5 levels (0-4, where 0 is top-level)
     max_depth = 4
 
-    # Indent based on depth
-    indent = "  " * depth
+    # Generate heading level based on depth (## for depth 0, ### for depth 1, etc.)
+    # Use 2 + depth (minimum heading level is 2) but cap at 6 (markdown only supports h1-h6)
+    heading_level = "#" * [ 2 + depth, 6 ].min
 
     # Format the comment itself using the template from options
-    comment_text = @options[:comment_format] % {
+    formatted_text = @options[:comment_format] % {
       username: comment["by"] || "[deleted]",
       karma: comment["author_karma"] || 0,
       text: comment["text"] || ""
     }
 
-    # Add index and indentation to the comment
-    comment_text = "#{indent}## [#{index}] #{comment_text}"
+    # Create a clear heading that includes the hierarchical index
+    # Format: "## [1] Comment by username (depth 0)"
+    comment_text = "#{heading_level} [#{index}] (depth #{depth})\n\n#{formatted_text}"
 
     # Format replies if any and if we haven't reached max depth
     if comment["replies"] && !comment["replies"].empty? && depth < max_depth
@@ -397,15 +399,16 @@ class Ai::HnThreadSummarizer
       replies_text = sorted_replies.map.with_index do |scored_reply, i|
         reply = scored_reply[:comment]
         format_comment_with_replies(reply, "#{index}.#{i + 1}", depth + 1)
-      end.join("\n")
+      end.join("\n\n")
 
       # Combine comment and its replies
-      comment_text + replies_text
+      comment_text + "\n\n" + replies_text
     else
       # Just return the comment text if no replies or max depth reached
       if comment["replies"] && !comment["replies"].empty? && depth >= max_depth
         # Add a note that deeper replies exist but were truncated
-        comment_text + "#{indent}  [DEPTH LIMIT REACHED: #{comment["replies"].size} additional replies not shown]\n"
+        depth_limit_note = "\n\n[DEPTH LIMIT REACHED: #{comment["replies"].size} additional replies not shown]"
+        comment_text + depth_limit_note
       else
         # No replies or empty replies
         comment_text
@@ -485,10 +488,11 @@ class Ai::HnThreadSummarizer
     instructions = <<~INSTRUCTIONS
       ## Instructions
 
-      Here are some elements to consider including in your summary (if they exist in the content; do not make them up if they do not).
+      Here are some elements to consider including in your summary (if they exist in the content; do not make them up
+      if they do not).
 
       1. Technical Substance:
-        - Interesting disagreement points or arguments
+        - Interesting disagreement/friction points or arguments
         - Key technical explanations or solutions
         - Insightful analogies
         - Technical misconceptions identified
@@ -497,7 +501,8 @@ class Ai::HnThreadSummarizer
          - Comments from experts with firsthand knowledge or experience
 
       3. Resources and References:
-         - Recommended tools, libraries, papers, or specifics resources (include URLs if possible)
+         - Recommended articles, tools, libraries, papers, or specific resources (**include verbatim URLs if
+           referenced**)
          - Relevant context
          - Benchmarks or empirical data
 
@@ -510,32 +515,43 @@ class Ai::HnThreadSummarizer
       ### Guidelines
 
       - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim**; do not truncate
-        them in any way (if you do; they won't work!)
-      - Cite particularly interesting comments by specific usernames where possible.
-      - Do not use foul language or be overly opinionated when generating your summary; be factual and unbiased.
-      - If you choose to reference specific comments, which is recommended, do not reference them by their index
-        (e.g., "1.2.1"), but rather simply use the author's username (e.g, "mbm suggested that...").
+        them in any way (if you do; they won't work!).
+      - Cite particularly interesting comments by specific usernames where possible. When referencing usernames, format
+        them using backticks, like this: `username`. If you choose to reference specific comments, which is recommended,
+        do not reference them by their index (e.g., "1.2.1"), but rather simply use the author's username (e.g, "`mbm`
+        suggested that...").
+      - Do not use foul language or be overtly opinionated when generating your summary.
+      - Write in a conversational tone.
+      - Your primary goals are to be insightful and highly readable. Maximize engagement with the reader and provide
+        fast value.
+
+      ### What to avoid doing
+
+      - Avoid pandering or folksy language.
+      - Avoid stuffiness or formality.
+      - Do not make things up.
 
       ### Summary format
 
-      Return your summary in well-formatted Markdown. Do not include a descriptive intro such as
-      "Here is a summary of the discussion..."; instead, simply return the summary itself.
+      Return your summary in *well-formatted, valid Markdown*. Do not include a descriptive intro such as
+      "Here is a summary of the discussion..."; instead, simply return the summary itself. Immediately produce value
+      for the reader.
 
       ### Summary audience & style
 
       The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
-      appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
+      appeal to that audience. Think less "stodgy newscaster" and more "engaging Twitter post by brilliant dev".
     INSTRUCTIONS
 
     # Construct the full prompt with instructions and content
     a = <<~PROMPT
       # Task
 
-      Create a concise yet detailed and technically nuanced summary of a Hacker News discussion. If the topic is a
-      controversial one, you may choose to make your summary somewhat edgy; but, remain unbiased and factual.
+      You are an expert Hacker News commentator.
 
-      The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
-      appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
+      In a software developer-targeted conversational tone, create a concise yet surprisingly detailed and technically
+      nuanced summary of this Hacker News discussion (comment) thread. If the topic is a controversial one, you may
+      choose to make your summary somewhat edgy; but, remain factual and unbiased.
 
       #{instructions}
 
