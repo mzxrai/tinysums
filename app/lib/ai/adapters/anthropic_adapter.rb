@@ -1,14 +1,17 @@
 # Implementation of the AI adapter for Anthropic's Claude models
 class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
-  # API version
-  API_VERSION = "2023-06-01"
-
   # Class methods for adapter-specific configuration
   class << self
     # Maximum token limit for the model (input + output)
     # @return [Integer] maximum token limit for this model
     def context_window_size
       200000
+    end
+
+    # API version
+    # @return [String] API version
+    def api_version
+      "2023-06-01".freeze
     end
 
     # Base URL for the API
@@ -29,12 +32,6 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
         },
         max_tokens: 20000
       }.freeze
-    end
-
-    # Maximum output tokens for the model
-    # @return [Integer] maximum output tokens for this model
-    def max_output_tokens
-      default_completion_options[:max_tokens]
     end
   end
 
@@ -65,7 +62,7 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
       response = @connection.post do |req|
         req.url "messages"
         req.headers["x-api-key"] = api_key
-        req.headers["anthropic-version"] = API_VERSION
+        req.headers["anthropic-version"] = self.class.api_version
         req.headers["content-type"] = "application/json"
         req.body = payload.to_json
       end

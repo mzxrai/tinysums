@@ -26,7 +26,7 @@ class Ai::AdapterFactory
 
   # The default AI provider to use when none is specified
   # @return [Symbol] Default provider symbol
-  DEFAULT_PROVIDER = :anthropic
+  DEFAULT_PROVIDER = :google
 
   class << self
     # Creates an AI adapter instance for the specified provider

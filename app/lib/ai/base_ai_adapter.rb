@@ -22,18 +22,19 @@ class Ai::BaseAiAdapter
       raise NotImplementedError, "#{self.class.name} must implement #base_url"
     end
 
-    # Maximum output tokens for the model
-    # Override in subclasses to provide model-specific values
-    # @return [Integer] maximum output tokens for this model
-    def max_output_tokens
-      raise NotImplementedError, "#{self.class.name} must implement #max_output_tokens"
-    end
-
     # Default completion options for the model
     # Override in subclasses to provide model-specific values
     # @return [Hash] default completion options for the model
     def default_completion_options
-      raise NotImplementedError, "#{self.class.name} must implement #default_completion_options"
+      {
+        max_tokens: 20000 # Default value
+      }
+    end
+
+    # Maximum output tokens for the model
+    # @return [Integer] maximum output tokens for this model
+    def max_output_tokens
+      default_completion_options[:max_tokens]
     end
   end
 
