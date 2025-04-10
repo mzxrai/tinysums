@@ -1,7 +1,34 @@
-my_hard_job:
-  cron: "* * * * *"
-  class: "HardJob"
+# Sidekiq Cron Schedule Configuration
+#
+# Format:
+# job_name:
+#   cron: "* * * * *"
+#   class: "ClassName"
+#   args: [argument1, argument2]
 
-hacker_news_fetcher_job:
-  cron: "*/30 * * * *"
-  class: "HackerNewsFetcherJob"
+# Summarize top HN stories hourly (default adapter)
+hourly_hn_stories_summarization:
+  cron: "0 * * * *" # Every hour at minute 0
+  class: "HnTopStoriesJob"
+  args: [30, false] # 30 stories, don't force refresh, default adapter
+
+# Different adapters can be scheduled for different times to compare results
+# Uncomment or modify as needed
+
+# Hourly summarization using Google adapter
+# hourly_google_summarization:
+#   cron: "15 * * * *" # Every hour at minute 15
+#   class: "HnTopStoriesJob"
+#   args: [30, false, "google"]
+
+# Hourly summarization using OpenAI adapter
+# hourly_openai_summarization:
+#   cron: "30 * * * *" # Every hour at minute 30
+#   class: "HnTopStoriesJob"
+#   args: [30, false, "openai"]
+
+# Hourly summarization using Anthropic adapter
+# hourly_anthropic_summarization:
+#   cron: "45 * * * *" # Every hour at minute 45
+#   class: "HnTopStoriesJob"
+#   args: [30, false, "anthropic"]

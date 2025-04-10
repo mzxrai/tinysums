@@ -2,9 +2,7 @@
 class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
   # Default options for Anthropic's Claude
   DEFAULT_OPTIONS = {
-    model: "claude-3-opus-20240229",
-    max_tokens: 1000,
-    temperature: 0.7
+    model: "claude-3-7-sonnet-20250219"
   }.freeze
 
   # Initialize the Anthropic adapter
@@ -13,6 +11,18 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
   def initialize(api_key, options = {})
     @api_key = api_key
     @options = DEFAULT_OPTIONS.merge(options)
+  end
+
+  # Returns model-specific context window limits for Claude models
+  # @return [Hash] context window information
+  def context_window_info
+    {
+      # Claude 3 Opus has a 200K token context window
+      max_token_limit: 200000,
+
+      # Optimal chunk size (relatively large due to Claude's capabilities)
+      optimal_chunk_size: 150000
+    }
   end
 
   # Generate a summary of the provided content

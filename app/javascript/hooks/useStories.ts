@@ -16,4 +16,4 @@ export const useStories = () => {
     // The server caches them for an hour, but we want to check more frequently
     refetchInterval: 1000 * 60 * 15,
   });
-}; 
+};

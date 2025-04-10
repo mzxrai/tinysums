@@ -25,6 +25,28 @@ const queryClient = new QueryClient({
  * It also includes the ClickCounter globally for now.
  */
 const App: React.FC = () => {
+  // Apply background color to root element to prevent flash
+  React.useLayoutEffect(() => {
+    // Get the root HTML element
+    const root = document.documentElement;
+
+    // Set a base background color that works for both light/dark modes
+    // This is removed when the app is loaded
+    const appRoot = document.getElementById('react-root');
+    if (appRoot) {
+      appRoot.style.backgroundColor = root.getAttribute('data-theme') === 'dark'
+        ? 'rgb(9, 9, 11)' // dark mode bg color
+        : '#f6f6ef'; // light mode bg color
+    }
+
+    // Cleanup function
+    return () => {
+      if (appRoot) {
+        appRoot.style.backgroundColor = '';
+      }
+    };
+  }, []);
+
   // Return the main application structure
   return (
     // Wrap the app with QueryClientProvider

@@ -17,6 +17,18 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
     @connection = create_connection
   end
 
+  # Returns model-specific context window limits for Gemini models
+  # @return [Hash] context window information
+  def context_window_info
+    {
+      # Gemini Pro 2.5 has a 1M token context window
+      max_token_limit: 1000000,
+
+      # Optimal chunk size (very large due to Gemini's massive context window)
+      optimal_chunk_size: 800000
+    }
+  end
+
   # Generate a summary of the provided content
   # @param content [String] The content to summarize
   # @param options [Hash] Additional options for the summary generation
@@ -86,6 +98,7 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
   # @param prompt [String] The prompt to send to the API
   # @param options [Hash] Configuration options for the API call
   # @return [String] The generated text
+  # @raise [StandardError] If the API call fails
   def call_api(prompt, options = {})
     # Prepare the request payload
     payload = {
@@ -116,15 +129,15 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
         # Extract the generated text from the response
         response.body.dig("candidates", 0, "content", "parts", 0, "text")
       else
-        # Handle API error
+        # Handle API error - raise an exception instead of returning an error message
         error_message = response.body["error"]["message"] rescue "Unknown error (HTTP #{response.status})"
         Rails.logger.error("Google Gemini API Error: #{error_message}")
-        "Error generating summary: #{error_message}"
+        raise StandardError, "Google Gemini API Error: #{error_message}"
       end
     rescue StandardError => e
-      # Handle connection or parsing errors
+      # Log the error and re-raise it
       Rails.logger.error("Google Gemini API Request Error: #{e.message}")
-      "Error connecting to Google Gemini API: #{e.message}"
+      raise
     end
   end
 end

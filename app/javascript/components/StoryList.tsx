@@ -223,11 +223,12 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
 
                 {/* AI Summary Section */}
                 {/* Display the StorySummary component if either summary is available */}
-                {(story.contentSummary || story.commentSummary) && (
+                {(story.contentSummary || story.commentsSummary || story.status) && (
                   <div className="ml-8 sm:ml-10">
                     <StorySummary
                       contentSummary={story.contentSummary}
-                      commentSummary={story.commentSummary}
+                      commentsSummary={story.commentsSummary}
+                      status={story.status}
                     />
                   </div>
                 )}

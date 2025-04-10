@@ -3,4 +3,7 @@
 /* Define data-theme attribute selector for dark mode */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
+/* Import markdown styles */
+@import "./markdown.css";
+
 /* You can add any custom CSS below if needed */

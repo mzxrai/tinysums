@@ -4,11 +4,11 @@ class Ai::HnThreadSummarizer
   # Default options for thread summarization
   DEFAULT_OPTIONS = {
     # Percentage of threads to include based on thread size
-    small_thread_percentage: 100,    # < 100 comments: include all
-    medium_thread_percentage: 50,    # 100-500 comments: include ~50%
-    large_thread_percentage: 35,     # 500-2000 comments: include ~35%
-    very_large_thread_percentage: 25, # 2000-5000 comments: include ~25%
-    massive_thread_minimum: 1000,    # 5000+ comments: include at least 1000
+    small_thread_percentage: 100,     # < 100 comments: include all
+    medium_thread_percentage: 80,     # 100-500 comments: include ~50%
+    large_thread_percentage: 65,      # 500-2000 comments: include ~35%
+    very_large_thread_percentage: 50, # 2000-5000 comments: include ~25%
+    massive_thread_minimum: 1000,     # 5000+ comments: include at least 1000
 
     # Thread size thresholds
     small_thread_threshold: 100,
@@ -17,12 +17,9 @@ class Ai::HnThreadSummarizer
     very_large_threshold: 5000,
 
     # Weights for comment scoring
-    descendant_weight: 0.5,          # Weight for number of replies
-    karma_weight: 0.3,               # Weight for author karma
-    content_weight: 0.2,             # Weight for content characteristics
-
-    # Maximum characters per chunk when processing large threads
-    max_chunk_size: 12000,
+    descendant_weight: 0.5, # Weight for number of replies
+    karma_weight: 0.3,      # Weight for author karma
+    content_weight: 0.2,    # Weight for content characteristics
 
     # Comment format template (can be customized)
     comment_format: "# Comment by %{username} (karma: %{karma})\n%{text}\n\n",
@@ -395,8 +392,8 @@ class Ai::HnThreadSummarizer
   # @param content [String] the content to check
   # @return [Boolean] true if chunking is needed
   def need_chunking?(content)
-    # Check if content exceeds our chunk size limit
-    content.length > @options[:max_chunk_size]
+    # Use the adapter's max input size (in characters) to determine if chunking is needed
+    content.length > @adapter.max_input_chars
   end
 
   # Generate summary directly (for smaller threads)
@@ -520,6 +517,9 @@ class Ai::HnThreadSummarizer
     # Split by top-level comments (those starting with "## [N]")
     comment_chunks = comments_text.split(/(?=## \[\d+\])/)
 
+    # Get the maximum chunk size from the adapter
+    max_chunk_size = @adapter.max_input_chars
+
     # Initialize result array with first chunk including header
     result = [ header + (comment_chunks.shift || "") ]
     current_chunk = ""
@@ -527,7 +527,7 @@ class Ai::HnThreadSummarizer
     # Process remaining chunks
     comment_chunks.each do |chunk|
       # If adding this chunk would exceed the limit, start a new chunk
-      if (current_chunk.length + chunk.length) > @options[:max_chunk_size]
+      if (current_chunk.length + chunk.length) > max_chunk_size
         result << current_chunk if current_chunk.length > 0
         current_chunk = chunk
       else
@@ -548,50 +548,79 @@ class Ai::HnThreadSummarizer
   # @param content [String] the formatted content
   # @return [String] the complete prompt
   def create_summary_prompt(story, content)
-    <<~PROMPT
-      You are tasked with creating a comprehensive, high-quality summary of a Hacker News discussion.
-
-      DISCUSSION TO SUMMARIZE:
-
-      #{content}
-
-      END DISCUSSION
-
+    instructions = <<~INSTRUCTIONS
+      ## Instructions
 
       Here are some elements to consider including in your summary (if they exist in the content; do not make them up if they do not).
 
       1. Technical Substance:
-         - Key technical explanations or solutions
-         - Technical disagreements and arguments
-         - Technical consensus among experienced practitioners
-         - Novel code snippets, algorithms, or methodologies
-         - Technical misconceptions identified and corrected
+        - Interesting disagreement points or arguments
+        - Key technical explanations or solutions
+        - Insightful analogies
+        - Technical misconceptions identified
 
       2. Expert Contributions:
-         - Comments from notable industry experts
-         - First-hand implementation experiences
-         - Unconventional but technically sound perspectives
+         - Comments from experts with firsthand knowledge or experience
 
       3. Resources and References:
-         - Recommended tools, libraries, papers, or resources
-         - Relevant historical context or previous attempts
-         - Benchmarks or empirical data shared
-
-      4. Community and Meta:
-         - Technical community sentiment
-         - Most active technical subtopics
-         - Insightful analogies used to explain complex concepts
-         - Unanswered questions despite significant discussion
-         - Fundamental assumptions questioned
+         - Recommended tools, libraries, papers, or specifics resources (include URLs if possible)
+         - Relevant context
+         - Benchmarks or empirical data
 
       5. Practical Takeaways:
-         - Actionable advice for practitioners
-         - Potential pitfalls or "gotchas" identified
+         - Actionable advice
+         - Potential pitfalls or gotchas
          - Trade-offs between approaches
-         - Future developments or research areas identified
+         - Future developments or research areas
 
-      Make your summary as detailed and technically insightful as possible, while maintaining accuracy. Use concrete examples when available. Write in a clear, technical style appropriate for developers.
+      ### Guidelines
+
+      - Include as many specific URLs that were referenced as possible. Do not make them up if they do not exist in the content.
+      - Cite particulary interesting comments by specific usernames where possible.
+      - Do not use foul language or be overly opinionated when generating your summary; be factual and unbiased.
+      - If you choose to reference specific comments, which is recommended, do not reference them by their index (e.g., 1.2.1),
+        but rather simply use the author's username (e.g, "mbm suggested that...").
+
+      ### Summary format
+
+      Return your summary in well-formatted Markdown. Do not include a descriptive intro such as
+      "Here is a summary of the discussion..."; instead, simply return the summary itself.
+
+      ### Summary audience & style
+
+      The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
+      appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
+    INSTRUCTIONS
+
+    # TODO: Add a prompt for summarizing Hacker News threads
+    a = <<~PROMPT
+      # Task
+
+      Create a concise yet detailed and technically nuanced summary of a Hacker News discussion.
+
+      The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
+      appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
+
+      #{instructions}
+
+      ----------------------------------------------------------------------------------------------------------------
+
+      BEGIN DISCUSSION TEXT TO SUMMARIZE:
+
+      #{content}
+
+      END DISCUSSION TEXT
+
+      ----------------------------------------------------------------------------------------------------------------
+
+      #{instructions}
+
+      **Remember: Return only the summary; do not include any preface or post-text.**
     PROMPT
+
+    puts a
+
+    a
   end
 
   # Create prompt for chunk summarization
@@ -674,7 +703,9 @@ class Ai::HnThreadSummarizer
          - Trade-offs between approaches
          - Future developments or research areas identified
 
-      Eliminate redundancy while preserving technical nuance and depth. Your summary should be as detailed and technically insightful as possible.
+      Where possible, include as many specific URLs that were referenced as possible. Do not make them up if they do not exist in the content.
+
+      When summarizing, preserve technical nuance and depth. Your summary should be as detailed and technically insightful as possible.
     PROMPT
   end
 end

@@ -1,0 +1,76 @@
+/* Markdown content styling */
+.markdown-content {
+  @apply text-sm leading-relaxed break-words;
+}
+
+.markdown-content h1 {
+  @apply text-xl font-bold mb-2 mt-3 dark:text-zinc-200;
+}
+
+.markdown-content h2 {
+  @apply text-lg font-semibold mb-2 mt-3 dark:text-zinc-200;
+}
+
+.markdown-content h3 {
+  @apply text-base font-medium mb-1 mt-2 dark:text-zinc-300;
+}
+
+.markdown-content p {
+  @apply mb-2 break-words;
+}
+
+.markdown-content a {
+  @apply text-blue-600 dark:text-blue-400 hover:underline;
+}
+
+.markdown-content ul {
+  @apply pl-5 mb-2 list-disc;
+}
+
+.markdown-content ol {
+  @apply pl-5 mb-2 list-decimal;
+}
+
+.markdown-content li {
+  @apply mb-1;
+}
+
+.markdown-content blockquote {
+  @apply pl-4 border-l-2 border-gray-300 dark:border-zinc-600 italic;
+}
+
+.markdown-content pre {
+  @apply p-2 bg-gray-100 dark:bg-zinc-800 overflow-auto rounded my-2;
+}
+
+.markdown-content code {
+  @apply bg-gray-100 dark:bg-zinc-800 px-1 py-0.5 rounded;
+}
+
+.markdown-content strong {
+  @apply font-bold;
+}
+
+.markdown-content em {
+  @apply italic;
+}
+
+.markdown-content hr {
+  @apply my-3 border-gray-300 dark:border-zinc-700;
+}
+
+.markdown-content img {
+  @apply max-w-full h-auto rounded my-2;
+}
+
+.markdown-content table {
+  @apply w-full mb-3 border-collapse;
+}
+
+.markdown-content th {
+  @apply border border-gray-300 dark:border-zinc-700 px-2 py-1 bg-gray-100 dark:bg-zinc-800;
+}
+
+.markdown-content td {
+  @apply border border-gray-300 dark:border-zinc-700 px-2 py-1;
+} 

@@ -2,9 +2,7 @@
 class Ai::Adapters::OpenaiAdapter < Ai::BaseAiAdapter
   # Default options for OpenAI's models
   DEFAULT_OPTIONS = {
-    model: "gpt-4o",
-    max_tokens: 1000,
-    temperature: 0.7
+    model: "gpt-4o"
   }.freeze
 
   # Initialize the OpenAI adapter
@@ -13,6 +11,18 @@ class Ai::Adapters::OpenaiAdapter < Ai::BaseAiAdapter
   def initialize(api_key, options = {})
     @api_key = api_key
     @options = DEFAULT_OPTIONS.merge(options)
+  end
+
+  # Returns model-specific context window limits for OpenAI models
+  # @return [Hash] context window information
+  def context_window_info
+    {
+      # GPT-4o has a 128K token context window
+      max_token_limit: 128000,
+
+      # Optimal chunk size (large but conservative)
+      optimal_chunk_size: 100000
+    }
   end
 
   # Generate a summary of the provided content
