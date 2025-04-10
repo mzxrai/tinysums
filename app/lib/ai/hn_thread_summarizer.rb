@@ -46,7 +46,7 @@ class Ai::HnThreadSummarizer
   # Generate a comprehensive summary of a HN story's comments
   # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] additional options to override instance defaults
-  # @return [String] the generated summary
+  # @return [String] the generated summary or nil if story not found
   def generate_thread_summary(story_id, options = {})
     # Merge instance options with method-specific options
     opts = @options.merge(options)
@@ -64,20 +64,23 @@ class Ai::HnThreadSummarizer
     # Format selected comments for the AI
     formatted_content = format_comments_for_summarization(story, selected_comments)
 
-    # Generate the summary using appropriate chunking if needed
-    if need_chunking?(formatted_content)
-      generate_chunked_summary(story, formatted_content, opts)
-    else
-      generate_direct_summary(story, formatted_content, opts)
+    # Truncate content if it exceeds max input size
+    if exceeds_max_input_size?(formatted_content)
+      # Apply truncation to ensure we stay within model's input limits
+      formatted_content = truncate_content(formatted_content)
     end
+
+    # Generate the summary from the (potentially truncated) content
+    generate_summary(story, formatted_content, opts)
   end
 
   private
 
   # Generate a hash for content to use as cache key
   # @param content [String] the content to hash
-  # @return [String] the hash string
+  # @return [String] the SHA-256 hash string of the content
   def generate_content_hash(content)
+    # Create a SHA-256 hash of the content for caching purposes
     Digest::SHA256.hexdigest(content)
   end
 
@@ -85,6 +88,7 @@ class Ai::HnThreadSummarizer
   # @param content_hash [String] the hash of the content
   # @return [String, nil] the cached summary or nil if not found
   def get_cached_summary(content_hash)
+    # Look up the summary in our cache using the hash
     @summary_cache[content_hash]
   end
 
@@ -92,12 +96,13 @@ class Ai::HnThreadSummarizer
   # @param content_hash [String] the hash of the content
   # @param summary [String] the summary to cache
   def cache_summary(content_hash, summary)
+    # Store the summary in our cache using the hash as key
     @summary_cache[content_hash] = summary
   end
 
   # Fetch a story with its complete comment tree
   # @param story_id [Integer] the HN story ID to fetch
-  # @return [Hash] the story with its comment tree
+  # @return [Hash, nil] the story with its comment tree or nil if not found
   def fetch_story_with_comments(story_id)
     # Log the start of fetching
     Rails.logger.info("HN API CALL: Fetching story ##{story_id} with comments")
@@ -109,6 +114,7 @@ class Ai::HnThreadSummarizer
     comment_count = story ? story["descendants"] || 0 : 0
     Rails.logger.info("HN API CALL COMPLETE: Fetched story ##{story_id} with #{comment_count} comments")
 
+    # Return the story with its comment tree
     story
   end
 
@@ -117,10 +123,10 @@ class Ai::HnThreadSummarizer
   def enrich_comments_with_karma(story)
     # Process each top-level comment
     story["comments"].each do |comment|
-      # Add author karma
+      # Add author karma to this comment
       add_karma_to_comment(comment)
 
-      # Process replies recursively
+      # Process replies recursively to add karma to all comments
       process_replies_with_karma(comment)
     end
   end
@@ -153,7 +159,7 @@ class Ai::HnThreadSummarizer
       # Add karma to this reply
       add_karma_to_comment(reply)
 
-      # Process nested replies
+      # Process nested replies recursively
       process_replies_with_karma(reply)
     end
   end
@@ -171,12 +177,15 @@ class Ai::HnThreadSummarizer
 
     # Calculate how many top-level comments to select
     top_level_count = story["comments"].size
+
+    # Take the ceiling of the percentage calculation to ensure we include at least one comment
+    # But don't exceed the actual number of top-level comments
     selection_count = [ (top_level_count * percentage / 100.0).ceil, top_level_count ].min
 
     # Score each top-level comment
     scored_comments = score_comments(story["comments"], options)
 
-    # Sort by score and take the top selection_count comments
+    # Sort by score (descending) and take the top selection_count comments
     selected_comments = scored_comments.sort_by { |c| -c[:score] }.first(selection_count)
 
     # Return just the comment data, not the scoring info
@@ -188,21 +197,25 @@ class Ai::HnThreadSummarizer
   # @param options [Hash] selection options
   # @return [Float] percentage of comments to include
   def determine_selection_percentage(total_comments, options)
+    # For small threads, include all comments (or the specified percentage)
     if total_comments < options[:small_thread_threshold]
-      # Small threads: include all comments
       options[:small_thread_percentage]
+
+    # For medium threads, include the medium thread percentage
     elsif total_comments < options[:medium_thread_threshold]
-      # Medium threads: include ~50%
       options[:medium_thread_percentage]
+
+    # For large threads, include the large thread percentage
     elsif total_comments < options[:large_thread_threshold]
-      # Large threads: include ~35%
       options[:large_thread_percentage]
+
+    # For very large threads, include the very large thread percentage
     elsif total_comments < options[:very_large_threshold]
-      # Very large threads: include ~25%
       options[:very_large_thread_percentage]
+
+    # For massive threads, calculate percentage to include at least the minimum number
+    # But cap at very_large_thread_percentage to avoid including too many
     else
-      # Massive threads: calculate percentage to include at least the minimum
-      # But cap at very_large_thread_percentage
       [
         (options[:massive_thread_minimum].to_f / total_comments * 100),
         options[:very_large_thread_percentage]
@@ -220,7 +233,7 @@ class Ai::HnThreadSummarizer
 
     # Score each comment
     comments.each do |comment|
-      # Skip deleted comments
+      # Skip deleted comments as they have no meaningful content
       next if comment["deleted"]
 
       # Calculate component scores
@@ -228,20 +241,21 @@ class Ai::HnThreadSummarizer
       karma_score = calculate_karma_score(comment)
       content_score = calculate_content_score(comment)
 
-      # Calculate weighted total score
+      # Calculate weighted total score using the specified weights from options
       total_score = (
         descendant_score * options[:descendant_weight] +
         karma_score * options[:karma_weight] +
         content_score * options[:content_weight]
       )
 
-      # Add to scored comments array
+      # Add to scored comments array with both the comment and its score
       scored_comments << {
         comment: comment,
         score: total_score
       }
     end
 
+    # Return the array of comments with their scores
     scored_comments
   end
 
@@ -267,14 +281,17 @@ class Ai::HnThreadSummarizer
 
     # Add counts for all immediate replies
     if comment["replies"] && !comment["replies"].empty?
+      # Iterate through each immediate reply
       comment["replies"].each do |reply|
         # Count the reply itself
         count += 1
+
         # Count its descendants recursively
         count += count_descendants(reply)
       end
     end
 
+    # Return the total count of descendants
     count
   end
 
@@ -302,10 +319,10 @@ class Ai::HnThreadSummarizer
     # Get the comment text
     text = comment["text"] || ""
 
-    # Initial score
+    # Initial score starts at 0
     score = 0.0
 
-    # Longer comments often have more substance (+0.3 max)
+    # Longer comments often have more substance (up to +0.3 max)
     score += [ text.length / 2000.0, 0.3 ].min
 
     # Comments with links often provide valuable resources (+0.3)
@@ -325,12 +342,18 @@ class Ai::HnThreadSummarizer
   def format_comments_for_summarization(story, selected_comments)
     # Build the header with story info
     header = "# Hacker News Discussion: #{story['title']}\n\n"
+
+    # Add URL if available
     header += "URL: #{story['url']}\n" if story["url"]
+
+    # Add poster information
     header += "Posted by: #{story['by']}\n"
+
+    # Add comment statistics
     header += "Total comments: #{story['descendants'] || 0}\n"
     header += "Comments processed: #{selected_comments.size}\n\n"
 
-    # Format each comment and its replies
+    # Format each comment and its replies, with incrementing indices
     comments_text = selected_comments.map.with_index do |comment, index|
       format_comment_with_replies(comment, "#{index + 1}", 0)
     end.join("\n")
@@ -354,12 +377,14 @@ class Ai::HnThreadSummarizer
     # Indent based on depth
     indent = "  " * depth
 
-    # Format the comment itself
+    # Format the comment itself using the template from options
     comment_text = @options[:comment_format] % {
       username: comment["by"] || "[deleted]",
       karma: comment["author_karma"] || 0,
       text: comment["text"] || ""
     }
+
+    # Add index and indentation to the comment
     comment_text = "#{indent}## [#{index}] #{comment_text}"
 
     # Format replies if any and if we haven't reached max depth
@@ -368,7 +393,7 @@ class Ai::HnThreadSummarizer
       scored_replies = score_comments(comment["replies"], @options)
       sorted_replies = scored_replies.sort_by { |r| -r[:score] }
 
-      # Format each reply
+      # Format each reply with its own index
       replies_text = sorted_replies.map.with_index do |scored_reply, i|
         reply = scored_reply[:comment]
         format_comment_with_replies(reply, "#{index}.#{i + 1}", depth + 1)
@@ -388,26 +413,47 @@ class Ai::HnThreadSummarizer
     end
   end
 
-  # Determine if content needs to be chunked for summarization
+  # Check if content exceeds max input size
   # @param content [String] the content to check
-  # @return [Boolean] true if chunking is needed
-  def need_chunking?(content)
-    # Use the adapter's max input size (in characters) to determine if chunking is needed
+  # @return [Boolean] true if content exceeds max size
+  def exceeds_max_input_size?(content)
+    # Compare content length to the adapter's max input size
+    # Returns true if content is too large for the model
     content.length > @adapter.max_input_chars
   end
 
-  # Generate summary directly (for smaller threads)
+  # Truncate content to fit within max input size
+  # @param content [String] the content to truncate
+  # @return [String] the truncated content
+  def truncate_content(content)
+    # Define safety margin to stay well under the limit
+    safety_margin = 100
+
+    # Calculate maximum size we can use
+    max_size = @adapter.max_input_chars - safety_margin
+
+    # Simply take the first portion of the content that will fit
+    truncated = content[0...max_size]
+
+    # Add truncation message at the end
+    truncated + "\n\n[CONTENT TRUNCATED DUE TO SIZE LIMITATIONS]"
+  end
+
+  # Generate summary for a thread
   # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
   # @param options [Hash] summarization options
   # @return [String] the generated summary
-  def generate_direct_summary(story, content, options)
-    # Generate a hash for the content
+  def generate_summary(story, content, options)
+    # Generate a hash for the content for cache lookup
     content_hash = generate_content_hash(content)
 
     # Check if caching is enabled and if there's a cached summary
     if options[:cache_summaries] && (cached_summary = get_cached_summary(content_hash))
+      # Log that we're using a cached summary
       Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']}")
+
+      # Return the cached summary
       return cached_summary
     end
 
@@ -415,7 +461,9 @@ class Ai::HnThreadSummarizer
     prompt = create_summary_prompt(story, content)
 
     # Generate summary using the AI adapter
-    Rails.logger.info("Generating direct summary for story ##{story['id']}")
+    Rails.logger.info("Generating summary for story ##{story['id']}")
+
+    # Call the adapter to generate the summary
     summary = @adapter.generate_summary(prompt, options)
 
     # Log the generated summary
@@ -424,130 +472,16 @@ class Ai::HnThreadSummarizer
     # Store in cache if caching is enabled
     cache_summary(content_hash, summary) if options[:cache_summaries]
 
+    # Return the generated summary
     summary
   end
 
-  # Generate summary using chunking (for larger threads)
-  # @param story [Hash] the story being summarized
-  # @param content [String] the formatted content
-  # @param options [Hash] summarization options
-  # @return [String] the generated summary
-  def generate_chunked_summary(story, content, options)
-    # Generate a hash for the full content
-    content_hash = generate_content_hash(content)
-
-    # Check if caching is enabled and if there's a cached summary
-    if options[:cache_summaries] && (cached_summary = get_cached_summary(content_hash))
-      Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']}")
-      return cached_summary
-    end
-
-    # Split content into chunks
-    chunks = split_content_into_chunks(content)
-
-    # Generate summary for each chunk
-    Rails.logger.info("Generating chunked summary for story ##{story['id']} (#{chunks.size} chunks)")
-    chunk_summaries = []
-
-    chunks.each_with_index do |chunk, index|
-      # Generate a hash for this chunk
-      chunk_hash = generate_content_hash(chunk)
-
-      # Check if there's a cached summary for this chunk
-      if options[:cache_summaries] && (cached_chunk_summary = get_cached_summary(chunk_hash))
-        Rails.logger.info("Using CACHED CHUNK SUMMARY ##{index + 1} for story ##{story['id']}")
-        chunk_summaries << cached_chunk_summary
-        next
-      end
-
-      # Create chunk-specific prompt
-      chunk_prompt = create_chunk_prompt(story, chunk, index + 1, chunks.size)
-
-      # Generate summary for this chunk
-      chunk_summary = @adapter.generate_summary(chunk_prompt, options)
-
-      # Log the generated chunk summary
-      Rails.logger.info("GENERATED CHUNK SUMMARY ##{index + 1} for story ##{story['id']}:\n#{chunk_summary}")
-
-      # Store this chunk summary in cache
-      cache_summary(chunk_hash, chunk_summary) if options[:cache_summaries]
-
-      chunk_summaries << chunk_summary
-    end
-
-    # Generate a hash for the combined chunk summaries
-    meta_content = chunk_summaries.join("\n\n")
-    meta_hash = generate_content_hash(meta_content)
-
-    # Check if there's a cached meta-summary
-    if options[:cache_summaries] && (cached_meta_summary = get_cached_summary(meta_hash))
-      Rails.logger.info("Using CACHED META-SUMMARY for story ##{story['id']}")
-      return cached_meta_summary
-    end
-
-    # Create meta-summary prompt
-    meta_prompt = create_meta_summary_prompt(story, chunk_summaries)
-
-    # Generate final meta-summary
-    Rails.logger.info("Generating meta-summary for story ##{story['id']}")
-    meta_summary = @adapter.generate_summary(meta_prompt, options)
-
-    # Log the generated meta-summary
-    Rails.logger.info("GENERATED META-SUMMARY for story ##{story['id']}:\n#{meta_summary}")
-
-    # Cache the meta-summary
-    cache_summary(meta_hash, meta_summary) if options[:cache_summaries]
-    # Also cache under the full content hash for future use
-    cache_summary(content_hash, meta_summary) if options[:cache_summaries]
-
-    meta_summary
-  end
-
-  # Split content into manageable chunks
-  # @param content [String] the content to split
-  # @return [Array<String>] array of content chunks
-  def split_content_into_chunks(content)
-    # Extract header (everything before the first comment)
-    header_match = content.match(/^(.*?)## \[1\]/m)
-    header = header_match ? header_match[1] : ""
-
-    # Remove header from content
-    comments_text = content.sub(header, "")
-
-    # Split by top-level comments (those starting with "## [N]")
-    comment_chunks = comments_text.split(/(?=## \[\d+\])/)
-
-    # Get the maximum chunk size from the adapter
-    max_chunk_size = @adapter.max_input_chars
-
-    # Initialize result array with first chunk including header
-    result = [ header + (comment_chunks.shift || "") ]
-    current_chunk = ""
-
-    # Process remaining chunks
-    comment_chunks.each do |chunk|
-      # If adding this chunk would exceed the limit, start a new chunk
-      if (current_chunk.length + chunk.length) > max_chunk_size
-        result << current_chunk if current_chunk.length > 0
-        current_chunk = chunk
-      else
-        # Otherwise, add to current chunk
-        current_chunk += chunk
-      end
-    end
-
-    # Add the last chunk if not empty
-    result << current_chunk if current_chunk.length > 0
-
-    # Add header to each chunk for context
-    result.map { |chunk| header + chunk }
-  end
-
-  # Create prompt for direct summarization
+  # Create prompt for summarization
   # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
   # @return [String] the complete prompt
   def create_summary_prompt(story, content)
+    # Define the instruction section
     instructions = <<~INSTRUCTIONS
       ## Instructions
 
@@ -575,11 +509,12 @@ class Ai::HnThreadSummarizer
 
       ### Guidelines
 
-      - Include as many specific URLs that were referenced as possible. Do not make them up if they do not exist in the content.
-      - Cite particulary interesting comments by specific usernames where possible.
+      - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim**; do not truncate
+        them in any way (if you do; they won't work!)
+      - Cite particularly interesting comments by specific usernames where possible.
       - Do not use foul language or be overly opinionated when generating your summary; be factual and unbiased.
-      - If you choose to reference specific comments, which is recommended, do not reference them by their index (e.g., 1.2.1),
-        but rather simply use the author's username (e.g, "mbm suggested that...").
+      - If you choose to reference specific comments, which is recommended, do not reference them by their index
+        (e.g., "1.2.1"), but rather simply use the author's username (e.g, "mbm suggested that...").
 
       ### Summary format
 
@@ -592,11 +527,12 @@ class Ai::HnThreadSummarizer
       appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
     INSTRUCTIONS
 
-    # TODO: Add a prompt for summarizing Hacker News threads
+    # Construct the full prompt with instructions and content
     a = <<~PROMPT
       # Task
 
-      Create a concise yet detailed and technically nuanced summary of a Hacker News discussion.
+      Create a concise yet detailed and technically nuanced summary of a Hacker News discussion. If the topic is a
+      controversial one, you may choose to make your summary somewhat edgy; but, remain unbiased and factual.
 
       The summary is for a technical, developer-focused audience, so write in a blunt, straightforward style that will
       appeal to that audience. Think less "nightly newscaster" and more "engaging Twitter post by brilliant dev".
@@ -618,94 +554,10 @@ class Ai::HnThreadSummarizer
       **Remember: Return only the summary; do not include any preface or post-text.**
     PROMPT
 
+    # Log the prompt (for debugging)
     puts a
 
+    # Return the complete prompt
     a
-  end
-
-  # Create prompt for chunk summarization
-  # @param story [Hash] the story being summarized
-  # @param chunk [String] the chunk content
-  # @param chunk_index [Integer] the current chunk index
-  # @param total_chunks [Integer] the total number of chunks
-  # @return [String] the chunk prompt
-  def create_chunk_prompt(story, chunk, chunk_index, total_chunks)
-    <<~PROMPT
-      You are summarizing a portion (chunk #{chunk_index} of #{total_chunks}) of a Hacker News discussion.
-
-      DISCUSSION CHUNK TO SUMMARIZE:
-
-      #{chunk}
-
-      END CHUNK
-
-
-      Provide a comprehensive, technical summary of this specific chunk of the discussion, covering:
-
-      - Key technical points, explanations, and code examples
-      - Expert insights and experiences
-      - Technical disagreements and their arguments
-      - Useful resources and references (URLs are great to include if they exist in the content)
-      - Practical advice and warnings
-
-      This is just one part of a larger summary, so focus only on accurately representing the content in this chunk.
-      Write your summary in a clear, technical style appropriate for developers.
-    PROMPT
-  end
-
-  # Create prompt for meta-summarization
-  # @param story [Hash] the story being summarized
-  # @param chunk_summaries [Array<String>] summaries of individual chunks
-  # @return [String] the meta-summary prompt
-  def create_meta_summary_prompt(story, chunk_summaries)
-    <<~PROMPT
-      You are tasked with creating a unified, comprehensive summary from multiple partial summaries of a Hacker News discussion titled "#{story['title']}".
-
-      Here are the summaries of different segments of the discussion:
-
-      BEGIN CHUNK SUMMARIES
-
-      #{chunk_summaries.map.with_index { |s, i| "SUMMARY CHUNK #{i+1}:\n#{s}\n\n" }.join}
-
-      END CHUNK SUMMARIES
-
-
-      Create a cohesive, unified summary that captures all key insights across these segments. Here are some elements
-      to consider including in your summary (if they exist in the prior summaries; do not make them up if they do not).
-
-      1. Technical Substance:
-         - Key technical explanations or solutions
-         - Technical disagreements and arguments
-         - Technical consensus among experienced practitioners
-         - Novel code snippets, algorithms, or methodologies
-         - Technical misconceptions identified and corrected
-
-      2. Expert Contributions:
-         - Comments from notable industry experts
-         - First-hand implementation experiences
-         - Unconventional but technically sound perspectives
-
-      3. Resources and References:
-         - Recommended tools, libraries, papers, or resources
-         - Relevant historical context or previous attempts
-         - Benchmarks or empirical data shared
-
-      4. Community and Meta:
-         - Technical community sentiment
-         - Most active technical subtopics
-         - Insightful analogies used to explain complex concepts
-         - Unanswered questions despite significant discussion
-         - Fundamental assumptions questioned
-
-      5. Practical Takeaways:
-         - Actionable advice for practitioners
-         - Potential pitfalls or "gotchas" identified
-         - Trade-offs between approaches
-         - Future developments or research areas identified
-
-      Where possible, include as many specific URLs that were referenced as possible. Do not make them up if they do not exist in the content.
-
-      When summarizing, preserve technical nuance and depth. Your summary should be as detailed and technically insightful as possible.
-    PROMPT
   end
 end
