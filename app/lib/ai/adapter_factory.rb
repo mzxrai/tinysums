@@ -26,23 +26,11 @@ class Ai::AdapterFactory
 
   # The default AI provider to use when none is specified
   # @return [Symbol] Default provider symbol
-  DEFAULT_PROVIDER = :google
-
-  # Environment variable names for each provider's API key
-  # @return [Hash{Symbol => String}] Provider to environment variable mapping
-  ENV_API_KEYS = {
-    # Google Gemini API key environment variable
-    google: "GOOG_GEM_API_KEY",
-    # OpenAI API key environment variable
-    openai: "OPEN_AI_API_KEY",
-    # Anthropic API key environment variable
-    anthropic: "ANTH_API_KEY"
-  }.freeze
+  DEFAULT_PROVIDER = :anthropic
 
   class << self
     # Creates an AI adapter instance for the specified provider
     # @param provider [Symbol, String] The provider type (:anthropic, :openai, :google)
-    # @param api_key [String] The API key for authenticating with the provider
     # @param options [Hash] Additional configuration options for the adapter
     # @option options [String] :model The specific model to use
     # @option options [Hash] :other_options Provider-specific configuration
@@ -50,9 +38,10 @@ class Ai::AdapterFactory
     # @raise [ArgumentError] If the provider type is invalid or API key is missing
     # @example
     #   adapter = Ai::AdapterFactory.create(:openai, "api-key-123")
-    def create(provider, api_key, options = {})
+    def create(provider, options = {})
       # Use default provider if none specified
       provider ||= DEFAULT_PROVIDER
+
       # Convert to symbol for consistent comparison
       provider_sym = provider.to_sym
 
@@ -65,8 +54,9 @@ class Ai::AdapterFactory
 
       # Get the adapter class name and convert to actual class
       adapter_class = ADAPTER_TYPES[provider_sym].constantize
+
       # Create and return new adapter instance
-      adapter_class.new(api_key, options)
+      adapter_class.new(options)
     end
 
     # Retrieves the default adapter based on application configuration
@@ -79,36 +69,8 @@ class Ai::AdapterFactory
     # @example
     #   adapter = Ai::AdapterFactory.default_adapter
     def default_adapter(options = {})
-      # Get provider from Rails config, fallback to default if not set
-      provider = Rails.configuration.x.ai&.provider || DEFAULT_PROVIDER
-      # Convert to symbol for consistent comparison
-      provider_sym = provider.to_sym
-
-      # Get API key - try Rails config first, then environment variable
-      api_key = Rails.configuration.x.ai&.api_key || fetch_api_key_from_env(provider_sym)
-
       # Create and return adapter instance
-      create(provider_sym, api_key, options)
-    end
-
-    private
-
-    # Retrieves the API key from the appropriate environment variable
-    # @param provider [Symbol] The provider type
-    # @return [String] The API key from environment
-    # @raise [ArgumentError] If the API key is not configured
-    # @example
-    #   api_key = fetch_api_key_from_env(:openai)
-    def fetch_api_key_from_env(provider)
-      # Get the environment variable name for this provider
-      env_var = ENV_API_KEYS[provider]
-      # Fetch the API key from environment, raise error if not found
-      api_key = ENV.fetch(env_var) do
-        raise ArgumentError, "No API key found for #{provider}. Please set the #{env_var} environment variable."
-      end
-
-      # Return the found API key
-      api_key
+      create(DEFAULT_PROVIDER, options)
     end
   end
 end
