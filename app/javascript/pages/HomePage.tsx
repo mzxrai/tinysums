@@ -53,20 +53,8 @@ export const HomePage: React.FC = () => {
 
   // Always render the same container structure
   return (
-    <div className="w-full min-h-screen bg-[#f6f6ef] dark:bg-zinc-950/95">
-      {isStoriesLoading ? (
-        // Empty placeholder with the same structure as StoryList
-        <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
-          <div className="bg-transparent dark:bg-zinc-900 rounded-none dark:rounded-lg dark:shadow-md overflow-hidden ring-0 dark:ring-1 dark:ring-zinc-800">
-            <ul className="divide-y divide-gray-200 dark:divide-zinc-800">
-              {/* Invisible placeholder */}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        // Actual content when loaded
-        <StoryList stories={combinedStories} />
-      )}
-    </div>
+    <div className="w-full min-h-screen bg-[#f6f6ef] dark:bg-zinc-900">
+      <StoryList stories={combinedStories} />
+    </div >
   );
 }; 

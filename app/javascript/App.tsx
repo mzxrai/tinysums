@@ -1,8 +1,11 @@
 import React from 'react';
+// Import React Router
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 // Import the Header component
 import { Header } from './components/layout/Header';
-// Import the HomePage component (will be created next)
+// Import page components
 import { HomePage } from './pages/HomePage';
+import { CompaniesPage } from './pages/companies/CompaniesPage';
 // Import the ClickCounter for now, might be moved later
 import { ClickCounter } from './components/ClickCounter';
 // Import TanStack Query components
@@ -21,8 +24,8 @@ const queryClient = new QueryClient({
 /**
  * @description The main application component.
  * Sets up the overall layout structure, including the Header,
- * and renders the main page content (currently HomePage).
- * It also includes the ClickCounter globally for now.
+ * and renders the main page content using React Router.
+ * Routes are configured here to enable direct URL navigation.
  */
 const App: React.FC = () => {
   // Apply background color to root element to prevent flash
@@ -51,20 +54,30 @@ const App: React.FC = () => {
   return (
     // Wrap the app with QueryClientProvider
     <QueryClientProvider client={queryClient}>
-      {/* Use a React Fragment to group elements without adding an extra DOM node */}
-      <>
+      {/* Use BrowserRouter for client-side routing */}
+      <BrowserRouter>
         {/* Render the common Header component */}
         <Header />
         {/* Main content area */}
         <main>
-          {/* Render the HomePage component - this will contain the StoryList */}
-          {/* Later, this area will likely be controlled by a router */}
-          <HomePage />
+          {/* Define the routes for the application */}
+          <Routes>
+            {/* Home route */}
+            <Route path="/" element={<HomePage />} />
+            {/* Companies route */}
+            <Route path="/companies" element={<CompaniesPage />} />
+            {/* Legacy route for backwards compatibility */}
+            <Route path="/hacker_news" element={<Navigate to="/" replace />} />
+            {/* Add additional routes here as needed, e.g.: */}
+            {/* <Route path="/company/:id" element={<CompanyDetailPage />} /> */}
+            {/* Default redirect for unmatched routes */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </main>
         {/* Render the ClickCounter globally at the bottom */}
         {/* This might be moved or removed depending on future requirements */}
         <ClickCounter />
-      </>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 };

@@ -15,15 +15,20 @@ Rails.application.routes.draw do
   # API routes
   namespace :api do
     resources :stories, only: [ :index ]
-    resources :summaries, only: [ :index, :show ]
+    # resources :summaries, only: [ :index, :show ]
   end
-
-  # Hacker News routes
-  get "hacker_news" => "hacker_news#index"
-
-  # Defines the root path route ("/")
-  root "hacker_news#index"
 
   # Mount Sidekiq web UI
   mount Sidekiq::Web => "/sidekiq"
+
+  # Set root path to React SPA
+  root "react#index"
+
+  # Catch-all route for React SPA - MUST be the last route
+  get "*path", to: "react#index", constraints: lambda { |request|
+    # Only handle HTML requests (exclude API, assets, and non-HTML requests)
+    request.format.html? &&
+    # Use a single regex match instead of multiple string comparisons
+    !request.path.match?(/\A\/(api|assets|cable|sidekiq)\//)
+  }
 end

@@ -57,9 +57,7 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
   // Return the main div container for the story list
   return (
     // Main container div
-    // Light mode background: HN orange-ish beige background (#f6f6ef)
-    // Dark mode background: Near-black (zinc-950/95)
-    <div className="w-full min-h-screen bg-[#f6f6ef] dark:bg-zinc-950/95">
+    <div className="w-full">
       {/* Inner container for centering content and applying padding */}
       {/* Uses max-width for larger screens, padding adjusts for smaller screens */}
       <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
@@ -68,8 +66,8 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
 
         {/* Stories List Container */}
         {/* Light mode: Transparent background (inherits page bg), no ring */}
-        {/* Dark mode: Dark background (zinc-900), rounded corners, shadow, zinc ring */}
-        <div className="bg-transparent dark:bg-zinc-900 rounded-none dark:rounded-lg dark:shadow-md overflow-hidden ring-0 dark:ring-1 dark:ring-zinc-800">
+        {/* Dark mode: Dark background (darker than header), rounded corners, shadow, zinc ring */}
+        <div className="bg-transparent rounded-none dark:rounded-lg dark:shadow-md overflow-hidden ring-0 dark:ring-1 dark:ring-zinc-800">
           {/* Unordered list to hold the individual story items */}
           {/* Light mode divider: Light gray (gray-200) */}
           {/* Dark mode divider: Darker zinc (zinc-800) */}
