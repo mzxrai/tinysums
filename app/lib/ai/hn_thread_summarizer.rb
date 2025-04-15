@@ -28,6 +28,9 @@ class Ai::HnThreadSummarizer
     cache_summaries: true
   }.freeze
 
+  # Define attribute readers for instance variables
+  attr_reader :adapter, :hn_client, :options, :summary_cache
+
   # Initialize the thread summarizer
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summarization
   # @param hn_client [HnApiClient] client for interacting with HN API
@@ -48,12 +51,9 @@ class Ai::HnThreadSummarizer
 
   # Generate a comprehensive summary of a HN story's comments
   # @param story_id [Integer] the HN story ID to summarize
-  # @param options [Hash] additional options to override instance defaults
+  # @param override_options [Hash] additional options to override instance defaults
   # @return [String] the generated summary or nil if story not found
-  def generate_thread_summary(story_id, options = {})
-    # Merge instance options with method-specific options
-    opts = @options.merge(options)
-
+  def generate_thread_summary(story_id, override_options = {})
     # Fetch the story with all its comments
     story = fetch_story_with_comments(story_id)
     return nil unless story
@@ -62,7 +62,7 @@ class Ai::HnThreadSummarizer
     enrich_comments_with_karma(story)
 
     # Score and select top-level comments for summarization
-    selected_comments = select_comments_for_summarization(story, opts)
+    selected_comments = select_comments_for_summarization(story, options.merge(override_options))
 
     # Format selected comments for the AI
     formatted_content = format_comments_for_summarization(story, selected_comments)
@@ -74,7 +74,7 @@ class Ai::HnThreadSummarizer
     end
 
     # Generate the summary from the (potentially truncated) content
-    generate_summary(story, formatted_content, opts)
+    generate_summary(story, formatted_content, options.merge(override_options))
   end
 
   private
@@ -92,7 +92,7 @@ class Ai::HnThreadSummarizer
   # @return [String, nil] the cached summary or nil if not found
   def get_cached_summary(content_hash)
     # Look up the summary in our cache using the hash
-    @summary_cache[content_hash]
+    summary_cache[content_hash]
   end
 
   # Store a summary in the cache
@@ -100,7 +100,7 @@ class Ai::HnThreadSummarizer
   # @param summary [String] the summary to cache
   def cache_summary(content_hash, summary)
     # Store the summary in our cache using the hash as key
-    @summary_cache[content_hash] = summary
+    summary_cache[content_hash] = summary
   end
 
   # Fetch a story with its complete comment tree
@@ -111,7 +111,7 @@ class Ai::HnThreadSummarizer
     Rails.logger.info("HN API CALL: Fetching story ##{story_id} with comments")
 
     # Use our HN client to get the story with all comments
-    story = @hn_client.get_story_with_comments(story_id)
+    story = hn_client.get_story_with_comments(story_id)
 
     # Log completion of the API call
     comment_count = story ? story["descendants"] || 0 : 0
@@ -144,7 +144,7 @@ class Ai::HnThreadSummarizer
     Rails.logger.info("HN API CALL: Fetching user #{comment["by"]} for karma lookup")
 
     # Get user info using our client
-    user = @hn_client.get_user(comment["by"])
+    user = hn_client.get_user(comment["by"])
 
     # Log completion of the API call
     user_karma = user ? user["karma"] || 0 : 0
@@ -382,7 +382,7 @@ class Ai::HnThreadSummarizer
     heading_level = "#" * [ 2 + depth, 6 ].min
 
     # Format the comment itself using the template from options
-    formatted_text = @options[:comment_format] % {
+    formatted_text = options[:comment_format] % {
       username: comment["by"] || "[deleted]",
       karma: comment["author_karma"] || 0,
       text: comment["text"] || ""
@@ -395,7 +395,7 @@ class Ai::HnThreadSummarizer
     # Format replies if any and if we haven't reached max depth
     if comment["replies"] && !comment["replies"].empty? && depth < max_depth
       # Sort replies by score (same algorithm as top-level)
-      scored_replies = score_comments(comment["replies"], @options)
+      scored_replies = score_comments(comment["replies"], options)
       sorted_replies = scored_replies.sort_by { |r| -r[:score] }
 
       # Format each reply with its own index
@@ -425,7 +425,7 @@ class Ai::HnThreadSummarizer
   def exceeds_max_input_size?(content)
     # Compare content length to the adapter's max input size
     # Returns true if content is too large for the model
-    content.length > @adapter.max_input_chars
+    content.length > adapter.max_input_chars
   end
 
   # Truncate content to fit within max input size
@@ -436,7 +436,7 @@ class Ai::HnThreadSummarizer
     safety_margin = 100
 
     # Calculate maximum size we can use
-    max_size = @adapter.max_input_chars - safety_margin
+    max_size = adapter.max_input_chars - safety_margin
 
     # Simply take the first portion of the content that will fit
     truncated = content[0...max_size]
@@ -470,7 +470,7 @@ class Ai::HnThreadSummarizer
     Rails.logger.info("Generating summary for story ##{story['id']}")
 
     # Call the adapter to generate the summary
-    summary = @adapter.generate_summary(prompt, options)
+    summary = adapter.generate_summary(prompt, options)
 
     # Log the generated summary
     Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")

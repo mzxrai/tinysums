@@ -10,6 +10,9 @@ class HnApiClient
   # Items (stories, comments) may be edited, but older comments rarely change
   ITEM_CACHE_EXPIRATION = 2.weeks
 
+  # Define attribute readers
+  attr_reader :connection
+
   # Creates a new HackerNews API client
   # @param connection [Faraday::Connection] optional custom Faraday connection
   def initialize(connection = nil)
@@ -32,7 +35,7 @@ class HnApiClient
   # @return [Array<Integer>] array of story IDs
   def get_top_story_ids
     # Make API request to get top story IDs
-    response = @connection.get("topstories.json")
+    response = connection.get("topstories.json")
     # Return empty array if the request failed
     return [] unless response.success?
     # Return the array of story IDs
@@ -47,7 +50,7 @@ class HnApiClient
     # The cache key is prefixed with "hn_item_" to avoid collisions
     Rails.cache.fetch("hn_item_#{id}", expires_in: ITEM_CACHE_EXPIRATION) do
       # Only make the API request if item is not in cache
-      response = @connection.get("item/#{id}.json")
+      response = connection.get("item/#{id}.json")
       # Return nil if the request failed
       return nil unless response.success?
       # Store the response body in cache and return it
@@ -66,7 +69,7 @@ class HnApiClient
     # The cache key is prefixed with "hn_user_" to avoid collisions
     Rails.cache.fetch("hn_user_#{username}", expires_in: USER_CACHE_EXPIRATION) do
       # Only make the API request if user is not in cache
-      response = @connection.get("user/#{username}.json")
+      response = connection.get("user/#{username}.json")
       # Return nil if the request failed
       return nil unless response.success?
       # Store the response body in cache and return it

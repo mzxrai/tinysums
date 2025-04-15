@@ -50,7 +50,7 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
   # @raise [StandardError] If the API call fails
   def call_api(system_prompt, user_prompt)
     # Prepare the API request payload
-    payload = @options.merge(
+    payload = options.merge(
       system: system_prompt,
       messages: [
         { role: "user", content: user_prompt }
@@ -59,7 +59,7 @@ class Ai::Adapters::AnthropicAdapter < Ai::BaseAiAdapter
 
     begin
       # Make the API request
-      response = @connection.post do |req|
+      response = connection.post do |req|
         req.url "messages"
         req.headers["x-api-key"] = api_key
         req.headers["anthropic-version"] = self.class.api_version

@@ -6,6 +6,9 @@ class Ai::BaseAiAdapter
   # 1 token is roughly 0.25 characters (or 4 chars per token)
   TOKEN_PER_CHAR_RATIO = 0.25
 
+  # Define attribute readers
+  attr_reader :options, :connection
+
   # Class methods for adapter-specific configuration
   class << self
     # Maximum token limit for the model (input + output)
@@ -96,7 +99,7 @@ class Ai::BaseAiAdapter
   # @param user_prompt [String] user message/question
   # @return [String] the generated text
   def complete(system_prompt, user_prompt)
-    Rails.logger.info("Calling API for #{@options[:model]}")
+    Rails.logger.info("Calling API for #{options[:model]}")
     call_api(system_prompt, user_prompt)
   end
 

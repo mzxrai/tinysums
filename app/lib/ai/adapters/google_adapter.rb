@@ -56,7 +56,7 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
         }
       ],
       generation_config: {
-        max_output_tokens: @options[:max_tokens]
+        max_output_tokens: options[:max_tokens]
       }
     }
 
@@ -67,8 +67,8 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
 
     begin
       # Make the API request
-      response = @connection.post do |req|
-        req.url "models/#{@options[:model]}:generateContent"
+      response = connection.post do |req|
+        req.url "models/#{options[:model]}:generateContent"
         req.params["key"] = api_key
         req.headers["content-type"] = "application/json"
         req.body = payload.to_json
