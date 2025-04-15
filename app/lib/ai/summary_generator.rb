@@ -2,10 +2,7 @@
 # Uses adapter pattern to support multiple AI providers
 class Ai::SummaryGenerator
   # Default options for summary generation
-  DEFAULT_OPTIONS = {
-    max_length: 500,
-    language: "en"
-  }.freeze
+  DEFAULT_OPTIONS = {}.freeze
 
   # Define attribute readers for instance variables
   attr_reader :adapter, :story_id, :options, :thread_summarizer
