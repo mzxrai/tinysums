@@ -86,6 +86,7 @@ class Ai::BaseAiAdapter
     Faraday.new(url: self.class.base_url) do |conn|
       conn.request :json
       conn.response :json
+      conn.options.timeout = 180 # Read timeout of 180 seconds
       conn.adapter Faraday.default_adapter
     end
   end
