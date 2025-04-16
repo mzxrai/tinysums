@@ -6,6 +6,7 @@ class Ai::SummaryGenerator
 
   # Define attribute readers for instance variables
   attr_reader :adapter, :story_id, :options, :thread_summarizer
+  attr_accessor :article_content
 
   # Initialize the summary generator with a specific adapter
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summary generation
@@ -23,18 +24,40 @@ class Ai::SummaryGenerator
 
     # Create a thread summarizer using our adapter
     @thread_summarizer = Ai::HnThreadSummarizer.new(adapter)
+
+    # Initialize the article content instance var
+    @article_content = nil
   end
 
+  # Generate both content and comment summaries for a story
+  # @param override_options [Hash] additional options to override instance defaults
+  # @return [Hash] hash with :content_summary and :comment_summary keys
+  def generate_story_summaries(override_options = {})
+    # Fetch and store the article content
+    self.article_content ||= fetch_content
+
+    # Generate summaries
+    content_summary = generate_content_summary(override_options)
+    comment_summary = generate_comment_summary(override_options)
+
+    # Return both summaries in a hash
+    {
+      content_summary: content_summary,
+      comment_summary: comment_summary
+    }
+  end
+
+  private
+
   # Generate a summary of an article's content
-  # @param content [String] the content to summarize
   # @param override_options [Hash] additional options to override instance defaults
   # @return [String] the generated summary
-  def generate_content_summary(content, override_options = {})
+  def generate_content_summary(override_options = {})
     # Log the summarization request
     Rails.logger.info("Generating content summary with #{adapter.class.name}")
 
     # Use the adapter to generate a summary
-    adapter.generate_summary(content, options.merge(override_options))
+    adapter.generate_summary(article_content, options.merge(override_options))
   end
 
   # Generate a summary of an article's comments
@@ -47,27 +70,6 @@ class Ai::SummaryGenerator
     # Use our specialized thread summarizer for HN comments
     thread_summarizer.generate_thread_summary(story_id, options.merge(override_options))
   end
-
-  # Generate both content and comment summaries for a story
-  # @param content [String, nil] optional content if already fetched
-  # @param override_options [Hash] additional options to override instance defaults
-  # @return [Hash] hash with :content_summary and :comment_summary keys
-  def generate_story_summaries(content = nil, override_options = {})
-    # Fetch content if not provided
-    content ||= fetch_content
-
-    # Generate summaries
-    content_summary = generate_content_summary(content, override_options)
-    comment_summary = generate_comment_summary(override_options)
-
-    # Return both summaries in a hash
-    {
-      content_summary: content_summary,
-      comment_summary: comment_summary
-    }
-  end
-
-  private
 
   # Fetch the content for a story (stubbed implementation)
   # @return [String] the article content
