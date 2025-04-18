@@ -48,29 +48,6 @@ class Ai::BaseAiAdapter
     @connection = create_connection
   end
 
-  # Generate a summary of the provided content
-  # This is a common interface method that should be available in all adapters
-  # @param content [String] the content to summarize
-  # @param options [Hash] additional options for the summary generation
-  # @return [String] the generated summary
-  def generate_summary(content, options = {})
-    # Default implementation delegates to complete
-    # Subclasses can override with provider-specific implementation if needed
-    system_prompt = options[:system_prompt] || ""
-    complete(system_prompt, content)
-  end
-
-  # Generate a summary of the provided comments
-  # This is a common interface method that should be available in all adapters
-  # @param comments [String] formatted comments string to summarize
-  # @param options [Hash] additional options for the summary generation
-  # @return [String] the generated summary of comments
-  def generate_comment_summary(comments, options = {})
-    # By default, just use the generate_summary method
-    # Subclasses can override with provider-specific implementation if needed
-    generate_summary(comments, options)
-  end
-
   # Calculate maximum input size in characters based on context window
   # @return [Integer] maximum input size in characters
   def max_input_chars
@@ -79,6 +56,16 @@ class Ai::BaseAiAdapter
 
     # Convert to characters using the fixed ratio
     (max_input_tokens / TOKEN_PER_CHAR_RATIO).floor
+  end
+
+  # Generic completion method - primary public interface for adapters.
+  # Executes the prompt using the configured model and options.
+  # @param system_prompt [String] system instructions
+  # @param user_prompt [String] user message/question
+  # @return [String] the generated text
+  def complete(system_prompt, user_prompt)
+    Rails.logger.info("Calling API for #{options[:model]}")
+    call_api(system_prompt, user_prompt)
   end
 
   private
@@ -92,15 +79,6 @@ class Ai::BaseAiAdapter
       conn.options.timeout = 180 # Read timeout of 180 seconds
       conn.adapter Faraday.default_adapter
     end
-  end
-
-  # Generic completion method for Claude
-  # @param system_prompt [String] system instructions
-  # @param user_prompt [String] user message/question
-  # @return [String] the generated text
-  def complete(system_prompt, user_prompt)
-    Rails.logger.info("Calling API for #{options[:model]}")
-    call_api(system_prompt, user_prompt)
   end
 
   # Get the API key from environment variables
@@ -118,5 +96,13 @@ class Ai::BaseAiAdapter
 
     # Use the fixed token-to-character ratio
     (text.length * TOKEN_PER_CHAR_RATIO).ceil
+  end
+
+  # Call the API for a given system prompt and user prompt, returning the generated text.
+  # @param system_prompt [String] system instructions
+  # @param user_prompt [String] user message/question
+  # @return [String] the generated text
+  def call_api(system_prompt, user_prompt)
+    raise NotImplementedError, "#{self.class.name} must implement #call_api"
   end
 end

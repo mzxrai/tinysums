@@ -12,6 +12,7 @@
 # @see Ai::Adapters::AnthropicAdapter
 # @see Ai::Adapters::OpenaiAdapter
 # @see Ai::Adapters::GoogleAdapter
+# @see Ai::Adapters::PerplexityAdapter
 class Ai::AdapterFactory
   # Mapping of provider symbols to their corresponding adapter class names
   # @return [Hash{Symbol => String}] Provider to class name mapping
@@ -21,7 +22,9 @@ class Ai::AdapterFactory
     # OpenAI's GPT model adapter
     openai: "Ai::Adapters::OpenaiAdapter",
     # Google's Gemini model adapter
-    google: "Ai::Adapters::GoogleAdapter"
+    google: "Ai::Adapters::GoogleAdapter",
+    # Perplexity's Sonar model adapter
+    perplexity: "Ai::Adapters::PerplexityAdapter"
   }.freeze
 
   # The default AI provider to use when none is specified
@@ -30,7 +33,7 @@ class Ai::AdapterFactory
 
   class << self
     # Creates an AI adapter instance for the specified provider
-    # @param provider [Symbol, String] The provider type (:anthropic, :openai, :google)
+    # @param provider [Symbol, String] The provider type (:anthropic, :openai, :google, :perplexity)
     # @param options [Hash] Additional configuration options for the adapter
     # @option options [String] :model The specific model to use
     # @option options [Hash] :other_options Provider-specific configuration
@@ -69,8 +72,11 @@ class Ai::AdapterFactory
     # @example
     #   adapter = Ai::AdapterFactory.default_adapter
     def default_adapter(options = {})
-      # Create and return adapter instance
-      create(DEFAULT_PROVIDER, options)
+      # Determine provider from Rails config or fallback to DEFAULT_PROVIDER
+      provider = Rails.application.config.x.ai.provider.presence || DEFAULT_PROVIDER
+
+      # Create adapter instance
+      create(provider, options)
     end
   end
 end

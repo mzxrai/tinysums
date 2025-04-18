@@ -29,7 +29,7 @@ class Ai::HnThreadSummarizer
   }.freeze
 
   # Define attribute readers for instance variables
-  attr_reader :adapter, :hn_client, :options, :summary_cache
+  attr_reader :adapter, :hn_client, :options
 
   # Initialize the thread summarizer
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summarization
@@ -44,16 +44,12 @@ class Ai::HnThreadSummarizer
 
     # Merge default options with provided options
     @options = DEFAULT_OPTIONS.merge(options)
-
-    # Initialize cache for summaries
-    @summary_cache = {}
   end
 
   # Generate a comprehensive summary of a HN story's comments
   # @param story_id [Integer] the HN story ID to summarize
-  # @param override_options [Hash] additional options to override instance defaults
   # @return [String] the generated summary or nil if story not found
-  def generate_thread_summary(story_id, override_options = {})
+  def generate_thread_summary(story_id)
     # Fetch the story with all its comments
     story = fetch_story_with_comments(story_id)
     return nil unless story
@@ -62,7 +58,7 @@ class Ai::HnThreadSummarizer
     enrich_comments_with_karma(story)
 
     # Score and select top-level comments for summarization
-    selected_comments = select_comments_for_summarization(story, options.merge(override_options))
+    selected_comments = select_comments_for_summarization(story)
 
     # Format selected comments for the AI
     formatted_content = format_comments_for_summarization(story, selected_comments)
@@ -74,7 +70,7 @@ class Ai::HnThreadSummarizer
     end
 
     # Generate the summary from the (potentially truncated) content
-    generate_summary(story, formatted_content, options.merge(override_options))
+    generate_summary(story, formatted_content)
   end
 
   private
@@ -169,14 +165,13 @@ class Ai::HnThreadSummarizer
 
   # Select top-level comments for summarization based on scoring
   # @param story [Hash] the story with its comment tree
-  # @param options [Hash] selection options
   # @return [Array<Hash>] selected comments for summarization
-  def select_comments_for_summarization(story, options)
+  def select_comments_for_summarization(story)
     # Count total comments in the story
     total_comments = story["descendants"] || 0
 
     # Determine percentage of comments to include based on thread size
-    percentage = determine_selection_percentage(total_comments, options)
+    percentage = determine_selection_percentage(total_comments)
 
     # Calculate how many top-level comments to select
     top_level_count = story["comments"].size
@@ -186,7 +181,7 @@ class Ai::HnThreadSummarizer
     selection_count = [ (top_level_count * percentage / 100.0).ceil, top_level_count ].min
 
     # Score each top-level comment
-    scored_comments = score_comments(story["comments"], options)
+    scored_comments = score_comments(story["comments"])
 
     # Sort by score (descending) and take the top selection_count comments
     selected_comments = scored_comments.sort_by { |c| -c[:score] }.first(selection_count)
@@ -197,9 +192,8 @@ class Ai::HnThreadSummarizer
 
   # Determine what percentage of comments to include based on thread size
   # @param total_comments [Integer] total number of comments in thread
-  # @param options [Hash] selection options
   # @return [Float] percentage of comments to include
-  def determine_selection_percentage(total_comments, options)
+  def determine_selection_percentage(total_comments)
     # For small threads, include all comments (or the specified percentage)
     if total_comments < options[:small_thread_threshold]
       options[:small_thread_percentage]
@@ -228,9 +222,8 @@ class Ai::HnThreadSummarizer
 
   # Score comments based on descendants, karma, and content
   # @param comments [Array<Hash>] comments to score
-  # @param options [Hash] scoring options and weights
   # @return [Array<Hash>] comments with scores
-  def score_comments(comments, options)
+  def score_comments(comments)
     # Create array to hold comments with their scores
     scored_comments = []
 
@@ -395,7 +388,7 @@ class Ai::HnThreadSummarizer
     # Format replies if any and if we haven't reached max depth
     if comment["replies"] && !comment["replies"].empty? && depth < max_depth
       # Sort replies by score (same algorithm as top-level)
-      scored_replies = score_comments(comment["replies"], options)
+      scored_replies = score_comments(comment["replies"])
       sorted_replies = scored_replies.sort_by { |r| -r[:score] }
 
       # Format each reply with its own index
@@ -448,11 +441,13 @@ class Ai::HnThreadSummarizer
   # Generate summary for a thread
   # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
-  # @param options [Hash] summarization options
   # @return [String] the generated summary
-  def generate_summary(story, content, options)
-    # Generate a hash for the content for cache lookup
-    content_hash = generate_content_hash(content)
+  def generate_summary(story, content)
+    # Create system and user prompts
+    system_prompt, user_prompt = create_summary_prompt(story, content)
+
+    # Use the user_prompt (which contains the actual content) for the cache hash
+    content_hash = generate_content_hash(user_prompt)
 
     # Check if caching is enabled and if there's a cached summary
     if options[:cache_summaries] && (cached_summary = get_cached_summary(content_hash))
@@ -463,14 +458,11 @@ class Ai::HnThreadSummarizer
       return cached_summary
     end
 
-    # Create prompt for the AI
-    prompt = create_summary_prompt(story, content)
-
     # Generate summary using the AI adapter
     Rails.logger.info("Generating summary for story ##{story['id']}")
 
-    # Call the adapter to generate the summary
-    summary = adapter.generate_summary(prompt, options)
+    # Call the adapter's complete method with separate system and user prompts
+    summary = adapter.complete(system_prompt, user_prompt)
 
     # Log the generated summary
     Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")
@@ -485,9 +477,9 @@ class Ai::HnThreadSummarizer
   # Create prompt for summarization
   # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
-  # @return [String] the complete prompt
+  # @return [Array<String>] An array containing [system_prompt, user_prompt]
   def create_summary_prompt(story, content)
-    # Define the instruction section
+    # Define the instructions for the task
     instructions = <<~INSTRUCTIONS
       ## Instructions
 
@@ -537,40 +529,43 @@ class Ai::HnThreadSummarizer
 
       Return your summary in *valid Markdown*. Do not include a descriptive intro such as "Here is a summary of the
       discussion..."; instead, simply return the summary itself.
+
+      *Remember*: Return only the summary; do not include any preface or post-text.
     INSTRUCTIONS
 
-    # Construct the full prompt with instructions and content
-    a = <<~PROMPT
+    # Prepare the full system prompt
+    system_prompt = <<~SYSTEM_PROMPT
       # Task
 
-      You are an expert Hacker News commentator, writing a summary of a recent thread for a software developer friend
-      of yours. Your goal is to create a concise yet surprisingly specific and technically nuanced summary of the
-      below-provided Hacker News discussion thread, which is about this story - "#{story['title']}".
+      You are an expert Hacker News (HN) commentator who writes summaries of recent HN comment threads for a software
+      developer friend. Your goal is to create concise yet surprisingly specific and technically nuanced summaries of
+      provided Hacker News discussion threads.
 
       If the topic is a controversial one, you may choose to make your summary somewhat edgy; but, remain factual and
       unbiased.
 
       #{instructions}
+    SYSTEM_PROMPT
 
-      ----------------------------------------------------------------------------------------------------------------
-
-      BEGIN DISCUSSION TEXT TO SUMMARIZE:
+    # Prepare the user message
+    user_prompt = <<~USER_PROMPT
+      --------------- BEGIN DISCUSSION TEXT TO SUMMARIZE ---------------
 
       #{content}
 
-      END DISCUSSION TEXT
-
-      ----------------------------------------------------------------------------------------------------------------
+      --------------- END DISCUSSION TEXT TO SUMMARIZE ---------------
 
       #{instructions}
-
-      **Remember: Return only the summary; do not include any preface or post-text.**
-    PROMPT
+    USER_PROMPT
 
     # Log the prompt (for debugging)
-    puts a
+    # Log both parts for debugging if needed
+    puts "--- SYSTEM PROMPT ---"
+    puts system_prompt
+    puts "--- USER PROMPT ---"
+    puts user_prompt
 
     # Return the complete prompt
-    a
+    [ system_prompt, user_prompt ]
   end
 end

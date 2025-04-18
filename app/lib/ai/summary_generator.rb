@@ -5,7 +5,7 @@ class Ai::SummaryGenerator
   DEFAULT_OPTIONS = {}.freeze
 
   # Define attribute readers for instance variables
-  attr_reader :adapter, :story_id, :options, :thread_summarizer
+  attr_reader :adapter, :story_id, :options, :thread_summarizer, :story_summarizer
   attr_accessor :article_content
 
   # Initialize the summary generator with a specific adapter
@@ -25,59 +25,42 @@ class Ai::SummaryGenerator
     # Create a thread summarizer using our adapter
     @thread_summarizer = Ai::HnThreadSummarizer.new(adapter)
 
+    # Create a story summarizer using our adapter
+    @story_summarizer = Ai::HnStorySummarizer.new(adapter)
+
     # Initialize the article content instance var
     @article_content = nil
   end
 
   # Generate both content and comment summaries for a story
-  # @param override_options [Hash] additional options to override instance defaults
   # @return [Hash] hash with :content_summary and :comment_summary keys
-  def generate_story_summaries(override_options = {})
-    # Fetch and store the article content
-    self.article_content ||= fetch_content
-
-    # Generate summaries
-    content_summary = generate_content_summary(override_options)
-    comment_summary = generate_comment_summary(override_options)
-
+  def generate_summaries
     # Return both summaries in a hash
     {
-      content_summary: content_summary,
-      comment_summary: comment_summary
+      story_summary: generate_story_summary
+      # comments_summary: generate_comments_summary
     }
   end
 
   private
 
   # Generate a summary of an article's content
-  # @param override_options [Hash] additional options to override instance defaults
   # @return [String] the generated summary
-  def generate_content_summary(override_options = {})
+  def generate_story_summary
     # Log the summarization request
-    Rails.logger.info("Generating content summary with #{adapter.class.name}")
+    Rails.logger.info("Generating story summary with #{adapter.class.name}")
 
-    # Use the adapter to generate a summary
-    adapter.generate_summary(article_content, options.merge(override_options))
+    # Use our specialized story summarizer
+    story_summarizer.generate_story_summary(story_id)
   end
 
   # Generate a summary of an article's comments
-  # @param override_options [Hash] additional options to override instance defaults
   # @return [String] the generated comment summary
-  def generate_comment_summary(override_options = {})
+  def generate_comments_summary
     # Log the summarization request
-    Rails.logger.info("Generating comment summary for story ##{story_id} with #{adapter.class.name}")
+    Rails.logger.info("Generating comments summary for story ##{story_id} with #{adapter.class.name}")
 
     # Use our specialized thread summarizer for HN comments
-    thread_summarizer.generate_thread_summary(story_id, options.merge(override_options))
-  end
-
-  # Fetch the content for a story (stubbed implementation)
-  # @return [String] the article content
-  def fetch_content
-    # Stub implementation - will fetch real content in the future
-    Rails.logger.info("Fetching content for story ##{story_id}")
-
-    # Return placeholder text for now
-    "This is a placeholder for article content that would be fetched from the URL."
+    thread_summarizer.generate_thread_summary(story_id)
   end
 end
