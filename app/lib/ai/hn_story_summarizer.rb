@@ -57,6 +57,8 @@ class Ai::HnStorySummarizer
     # STAGE 1: Extract detailed content from the article URL
     content, citations = extract_technical_content
 
+    puts "CITATIONS: #{citations}"
+
     # STAGE 2: Generate dev-focused summary from the technical content
     final_summary = generate_dev_summary(content, citations)
 
@@ -115,7 +117,8 @@ class Ai::HnStorySummarizer
   end
 
   # STAGE 1: Extract technical content from the article URL
-  # @return [Array] [content, citations] where content is the extracted technical content and citations is an array of citation URLs
+  # @return [Array] [content, citations] where content is the extracted technical content and citations is an array of
+  # citation URLs
   # @raise [RuntimeError] if extraction fails
   def extract_technical_content
     # Log the start of extraction with story ID and URL for tracking in logs
@@ -130,29 +133,10 @@ class Ai::HnStorySummarizer
 
     begin
       # Call the AI adapter (e.g., Perplexity API) to process the URL and extract relevant content
-      # Response could be a string (older API format) or a hash with content + citations (newer format)
-      response = extraction_adapter.complete(system_prompt, user_prompt)
-
-      # Initialize content and citations with default values
-      # Content will hold the extracted text from the article
-      # Citations will track source URLs referenced by the extraction service
-      content = response
-      citations = []
-
-      # Handle newer API response format where citations are included in a hash
-      # Example: {"content": "extracted text", "citations": ["url1", "url2"]}
-      if response.is_a?(Hash) && response["citations"]
-        # Extract content from hash, supporting both string and symbol keys
-        # Fallback to empty string if content field is missing
-        content = response["content"] || response[:content] || ""
-
-        # Extract citations array, supporting both string and symbol keys
-        # Fallback to empty array if citations field is missing
-        citations = response["citations"] || response[:citations] || []
-      end
+      # Response is an array where first element is content, second is citations
+      content, citations = extraction_adapter.complete(system_prompt, user_prompt)
 
       # Validate that we have actual content to work with
-      # This prevents processing empty responses that would result in meaningless summaries
       if !content || content.strip.empty?
         raise "Empty content extracted for URL: #{story['url']}"
       end
@@ -166,7 +150,6 @@ class Ai::HnStorySummarizer
       end
 
       # Return both the extracted content and any citations as an array
-      # This will be used by the summarization stage
       [ content, citations ]
     rescue StandardError => e
       # Log the specific error details for debugging
@@ -191,6 +174,7 @@ class Ai::HnStorySummarizer
 
     begin
       # Call the summary adapter to generate the dev-focused summary
+      # The summary adapter will return a string, not an array with citations
       summary = summary_adapter.complete(system_prompt, user_prompt)
 
       # Check if the generated summary is empty or invalid
@@ -296,12 +280,21 @@ class Ai::HnStorySummarizer
     # Instructions that we'll use both in the system prompt and the user prompt
     instructions = <<~SYSTEM
       You're an expert at summarizing articles shared on Hacker News for a blunt developer audience.
-      When provided with an article's detailed technical overview, you prepare the blunt, dev-focused summary.
-      Maintain key technical details, but make it a little more concise and engaging.
-      Reproduce important data points, specific quotes, URLs., etc., **verbatim**. Do NOT make details up.
-      In essence, your summary should be just as informative as the summary you're provided with, but more readable and engaging.
 
-      Produce your summary in *valid Markdown*. Return JUST the summary, no preface or post-text.
+      When provided with an article's detailed technical overview, you prepare the ultra-readable, dev-focused summary.
+
+      Maintain key technical details, but make it a little more concise and engaging.
+
+      Reproduce important data points, specific quotes, URLs., etc., **verbatim**. Do NOT make details up.
+
+      In essence, your summary should be just as informative as the summary you're provided with, but more readable.
+
+      If you find any citations in the technical overview, use them to create a list of numbered references at the end
+      of your summary. Format the citations as an ordered Markdown list.
+
+      Produce your summary in *valid Markdown*. Return JUST the summary, no preface or post-text. In other words, don't
+      start your summary with, "Ok devs, here's your summary..." or anything like that. Just return the summary starting
+      with the first Markdown heading.
     SYSTEM
 
     # Set the system prompt to the instructions
@@ -320,20 +313,28 @@ class Ai::HnStorySummarizer
     user_prompt = <<~USER
       Here is the technical overview of an article titled "#{story['title']}" that was posted on Hacker News.
 
-      I will provide the technical overview for you, and then review your instructions to generate the summary.
+      I will provide the technical overview for you, and then provide your instructions to generate the summary.
 
-      BEGIN TECHNICAL OVERVIEW
+
+      --------------- BEGIN TECHNICAL OVERVIEW ---------------
 
       #{content}
       #{formatted_citations}
-      END TECHNICAL OVERVIEW
 
-      ----------------------
+      --------------- END TECHNICAL OVERVIEW ---------------
+
+
+
+      --------------- BEGIN INSTRUCTIONS FOR SUMMARY GENERATION ---------------
 
       To create your summary, please follow these instructions:
 
       #{instructions}
+
+      --------------- END INSTRUCTIONS FOR SUMMARY GENERATION ---------------
     USER
+
+    puts "USER PROMPT: #{user_prompt}"
 
     # Return an array containing both the system prompt and user prompt
     [ system_prompt, user_prompt ]

@@ -36,7 +36,8 @@ class Ai::Adapters::PerplexityAdapter < Ai::BaseAiAdapter
   # Call the Perplexity API using Faraday
   # @param system_prompt [String] The system prompt to send to the API
   # @param user_prompt [String] The user prompt to send to the API
-  # @return [String] The generated text
+  # @return [Array<String, Array>] An array where the first element is the generated text and the second element is the
+  #   citations array
   # @raise [StandardError] If the API call fails
   def call_api(system_prompt, user_prompt)
     # Prepare the API request payload
@@ -71,8 +72,12 @@ class Ai::Adapters::PerplexityAdapter < Ai::BaseAiAdapter
       if response.success?
         puts response.body
 
-        # Extract the content from the response
-        response.body["choices"][0]["message"]["content"]
+        # Extract the content and citations from the response
+        content = response.body["choices"][0]["message"]["content"]
+        citations = response.body["citations"] || []
+
+        # Return both content and citations
+        [ content, citations ]
       else
         # Handle API error
         error_message = response.body["error"]["message"] rescue "Unknown error (HTTP #{response.status})"
