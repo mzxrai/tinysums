@@ -292,9 +292,13 @@ class Ai::HnStorySummarizer
       If you find any citations in the technical overview, use them to create a list of numbered references at the end
       of your summary. Format the citations as an ordered Markdown list.
 
-      Produce your summary in *valid Markdown*. Return JUST the summary, no preface or post-text. In other words, don't
-      start your summary with, "Ok devs, here's your summary..." or anything like that. Just return the summary starting
-      with the first Markdown heading.
+      Produce your summary in *valid Markdown*. Return JUST the summary starting with the first Markdown heading, no
+      preface or post-text. In other words, don't start your summary with, "Ok devs, here's your summary..." or anything
+      like that. Also, don't title your summary a "summary for devs" or speak to developers directly; the summary is
+      *for* them, but not written *to* them. Developers will be presented with many of these summaries on the same
+      webpage side by side, so speaking to them directly would be redundant and annoying.
+
+      Just return the summary starting with the first Markdown heading.
     SYSTEM
 
     # Set the system prompt to the instructions
