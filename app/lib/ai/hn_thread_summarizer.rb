@@ -514,8 +514,7 @@ class Ai::HnThreadSummarizer
 
       ### Guidelines
 
-      - Write in a conversational tone; remember, you're writing to a close software developer friend whose attention
-        you want to keep.
+      - Write in an informal tone that's appropriate for a blunt, somewhat persnickety software developer audience.
       - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim**; do not truncate
         them in any way (if you do; they won't work!).
       - Cite particularly interesting comments by specific usernames where possible. When referencing usernames, format
@@ -529,11 +528,15 @@ class Ai::HnThreadSummarizer
       - Avoid stuffiness or formality.
       - Do not make things up.
       - Do not use foul language.
+      - Do not "speak to" developers directly; the summary is *for* them, but not written *to* them.
 
       ### Summary format
 
       Return your summary in *valid Markdown*. Do not include a descriptive intro such as "Here is a summary of the
-      discussion..."; instead, simply return the summary itself.
+      discussion..."; instead, simply return the summary itself starting with the first Markdown heading. Don't title
+      your summary a "summary for devs" or speak to developers directly; the summary is *for* them, but not written
+      *to* them. Developers will be presented with many of these summaries on the same webpage side by side, so
+      speaking to them directly would be redundant and annoying.
 
       *Remember*: Return only the summary; do not include any preface or post-text.
     INSTRUCTIONS
@@ -542,9 +545,9 @@ class Ai::HnThreadSummarizer
     system_prompt = <<~SYSTEM_PROMPT
       # Task
 
-      You are an expert Hacker News (HN) commentator who writes summaries of recent HN comment threads for a software
-      developer friend. Your goal is to create concise yet surprisingly specific and technically nuanced summaries of
-      provided Hacker News discussion threads.
+      You are an expert Hacker News (HN) commentator who writes summaries of recent HN comment threads. Your goal is to
+      create concise yet surprisingly specific and technically nuanced summaries of provided Hacker News discussion
+      threads.
 
       If the topic is a controversial one, you may choose to make your summary somewhat edgy; but, remain factual and
       unbiased.

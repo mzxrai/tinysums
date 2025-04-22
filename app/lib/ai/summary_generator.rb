@@ -41,8 +41,8 @@ class Ai::SummaryGenerator
   def generate_summaries
     # Return both summaries in a hash
     {
-      story_summary: generate_story_summary
-      # comments_summary: generate_comments_summary
+      story_summary: generate_story_summary,
+      comments_summary: generate_comments_summary
     }
   end
 
