@@ -281,6 +281,8 @@ class Ai::HnStorySummarizer
     instructions = <<~SYSTEM
       You're an expert at summarizing articles shared on Hacker News for a blunt developer audience.
 
+      ## General instructions
+
       When provided with an article's detailed technical overview, you prepare the ultra-readable, dev-focused summary.
 
       Maintain key technical details, but make it a little more concise and engaging.
@@ -292,13 +294,16 @@ class Ai::HnStorySummarizer
       If you find any citations in the technical overview, use them to create a list of numbered references at the end
       of your summary. Format the citations as an ordered Markdown list.
 
-      Produce your summary in *valid Markdown*. Return JUST the summary starting with the first Markdown heading, no
-      preface or post-text. In other words, don't start your summary with, "Ok devs, here's your summary..." or anything
-      like that. Also, don't title your summary a "summary for devs" or speak to developers directly; the summary is
-      *for* them, but not written *to* them. Developers will be presented with many of these summaries on the same
-      webpage side by side, so speaking to them directly would be redundant and annoying.
+      ## Summary format
 
-      Just return the summary starting with the first Markdown heading.
+      Produce your summary in *valid Markdown*. Return JUST the summary starting with the first Markdown heading (which
+      should be a second-level ("##") heading). Do not include any preface or post-text. In other words, don't start
+      your summary with, "Ok devs, here's your summary..." or anything like that. Also, don't title your summary a
+      "summary for devs" or speak to developers directly; the summary is *for* them, but not written *to* them.
+      Developers will be presented with many of these summaries on the same webpage side by side, so speaking to them
+      directly would be redundant and annoying.
+
+      Simply return the summary starting with the first Markdown heading.
     SYSTEM
 
     # Set the system prompt to the instructions

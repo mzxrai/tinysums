@@ -533,10 +533,10 @@ class Ai::HnThreadSummarizer
       ### Summary format
 
       Return your summary in *valid Markdown*. Do not include a descriptive intro such as "Here is a summary of the
-      discussion..."; instead, simply return the summary itself starting with the first Markdown heading. Don't title
-      your summary a "summary for devs" or speak to developers directly; the summary is *for* them, but not written
-      *to* them. Developers will be presented with many of these summaries on the same webpage side by side, so
-      speaking to them directly would be redundant and annoying.
+      discussion..."; instead, simply return the summary itself starting with the first Markdown heading, which should
+      be a second-level ("##" heading). Don't title your summary a "summary for devs" or speak to developers directly;
+      the summary is *for* them, but not written *to* them. Developers will be presented with many of these summaries on
+      the same webpage side by side, so speaking to them directly would be redundant and annoying.
 
       *Remember*: Return only the summary; do not include any preface or post-text.
     INSTRUCTIONS
