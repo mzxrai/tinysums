@@ -1,57 +1,81 @@
 # Service for summarizing Hacker News story articles
-# Uses AI to fetch and summarize article content
+# Uses a two-stage AI approach to extract content and create dev-focused summaries
 class Ai::HnStorySummarizer
   # Default options for story summarization
   DEFAULT_OPTIONS = {
     # Enable caching of summaries
-    cache_summaries: true
+    cache_summaries: true,
+
+    # Maximum story text length for summarization
+    max_text_length: 8000,
+
+    # If true, include full story text in prompt
+    # If false, include only truncated text if it exceeds max_text_length
+    include_full_text: false,
+
+    # Include summary context like score, comment count
+    include_context: true,
+
+    # Custom summary instructions (can be nil to use defaults)
+    custom_instructions: nil
   }.freeze
 
-  # Define attribute readers for instance variables
-  attr_reader :adapter, :hn_client, :options
+  # Define attribute readers/accessors for instance variables
+  attr_reader :extraction_adapter, :summary_adapter, :hn_client, :options, :story
 
   # Initialize the story summarizer
-  # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summarization
-  # @param hn_client [HnApiClient] client for interacting with HN API
+  # @param extraction_adapter [Ai::BaseAiAdapter] the AI adapter to use for content extraction
+  # @param summary_adapter [Ai::BaseAiAdapter] the AI adapter to use for dev-focused summarization
+  # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] options to override defaults
-  def initialize(adapter, hn_client = nil, options = {})
-    # Save the AI adapter for making summarization requests
-    @adapter = adapter
+  def initialize(extraction_adapter, summary_adapter, story_id, options = {})
+    # Save the AI adapter for content extraction (Stage 1)
+    @extraction_adapter = extraction_adapter
 
-    # Create or use provided HN API client
-    @hn_client = hn_client || HnApiClient.new
+    # Save the AI adapter for dev-focused summarization (Stage 2)
+    @summary_adapter = summary_adapter
+
+    # Create a new HN API client
+    @hn_client = HnApiClient.new
 
     # Merge default options with provided options
     @options = DEFAULT_OPTIONS.merge(options)
+
+    # Fetch and validate the story using the provided ID
+    @story = fetch_and_validate_story(story_id)
   end
 
-  # Generate a summary of a HN story's article content
-  # @param story_id [Integer] the HN story ID
-  # @return [String] the generated summary or nil if story not found
-  def generate_story_summary(story_id)
-    # Fetch story and validate its URL
-    story = fetch_and_validate_story(story_id)
-
-    # Generate a unique hash for this URL to use as a cache key
-    content_hash = generate_content_hash(story["url"])
-
+  # Generate a summary of the HN story's article content
+  # @return [String] the generated summary
+  def generate_story_summary
     # Check if we have a cached summary and return it if available
-    cached = get_cached_summary_if_enabled(content_hash, story["id"])
+    cached = get_cached_summary_if_enabled
 
     # Return the cached summary if we found one
     return cached if cached
 
-    # Execute the main summarization process to generate a new summary
-    summary = execute_summarization(story)
+    # STAGE 1: Extract detailed content from the article URL
+    content, citations = extract_technical_content
+
+    # STAGE 2: Generate dev-focused summary from the technical content
+    final_summary = generate_dev_summary(content, citations)
 
     # Save the generated summary to our cache if caching is enabled
-    cache_summary(content_hash, summary) if options[:cache_summaries]
+    cache_summary_if_enabled(final_summary)
 
     # Return the newly generated summary
-    summary
+    final_summary
   end
 
   private
+
+  # Get the content hash for the current story
+  # This is memoized so it's only calculated once per story
+  # @return [String] the SHA-256 hash for the story URL
+  def content_hash
+    # Calculate and store the hash of the story URL
+    @content_hash ||= Digest::SHA256.hexdigest(story["url"])
+  end
 
   # Fetch story details and validate it has a URL
   # @param story_id [Integer] the HN story ID
@@ -75,16 +99,12 @@ class Ai::HnStorySummarizer
   end
 
   # Get cached summary if caching is enabled
-  # @param content_hash [String] the hash to look up
-  # @param story_id [String] the story ID for logging
   # @return [String, nil] the cached summary or nil if not found/disabled
-  def get_cached_summary_if_enabled(content_hash, story_id)
-    puts "GET CACHED SUMMARY IF ENABLED: #{options[:cache_summaries]}"
-
+  def get_cached_summary_if_enabled
     # Check if caching is enabled and if we have a cached summary for this hash
-    if options[:cache_summaries] && (cached_summary = get_cached_summary(content_hash))
+    if options[:cache_summaries] && (cached_summary = get_cached_summary)
       # Log that we're using a cached summary instead of generating a new one
-      Rails.logger.info("Using CACHED SUMMARY for story ##{story_id}")
+      Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']}")
 
       # Return the cached summary we found
       return cached_summary
@@ -94,63 +114,124 @@ class Ai::HnStorySummarizer
     nil
   end
 
-  # Execute the article summarization
-  # @param story [Hash] the story being summarized
-  # @return [String] the final summary
-  # @raise [RuntimeError] if summarization fails
-  def execute_summarization(story)
-    # Log that we're starting the summarization process
-    Rails.logger.info("Summarizing article from URL for story ##{story['id']}: #{story['url']}")
+  # STAGE 1: Extract technical content from the article URL
+  # @return [Array] [content, citations] where content is the extracted technical content and citations is an array of citation URLs
+  # @raise [RuntimeError] if extraction fails
+  def extract_technical_content
+    # Log the start of extraction with story ID and URL for tracking in logs
+    Rails.logger.info("STAGE 1: Extracting technical content from URL for story ##{story['id']}: #{story['url']}")
 
-    # Create the system and user prompts for the AI
-    system_prompt, user_prompt = create_prompts(story)
+    # Generate prompts for the extraction AI model
+    system_prompt, user_prompt = create_extraction_prompts
+
+    # Debug output to help troubleshoot prompt issues
+    puts "SYSTEM PROMPT: #{system_prompt}"
+    puts "USER PROMPT: #{user_prompt}"
 
     begin
-      # Call the AI adapter to generate the summary
-      summary = adapter.complete(system_prompt, user_prompt)
+      # Call the AI adapter (e.g., Perplexity API) to process the URL and extract relevant content
+      # Response could be a string (older API format) or a hash with content + citations (newer format)
+      response = extraction_adapter.complete(system_prompt, user_prompt)
+
+      # Initialize content and citations with default values
+      # Content will hold the extracted text from the article
+      # Citations will track source URLs referenced by the extraction service
+      content = response
+      citations = []
+
+      # Handle newer API response format where citations are included in a hash
+      # Example: {"content": "extracted text", "citations": ["url1", "url2"]}
+      if response.is_a?(Hash) && response["citations"]
+        # Extract content from hash, supporting both string and symbol keys
+        # Fallback to empty string if content field is missing
+        content = response["content"] || response[:content] || ""
+
+        # Extract citations array, supporting both string and symbol keys
+        # Fallback to empty array if citations field is missing
+        citations = response["citations"] || response[:citations] || []
+      end
+
+      # Validate that we have actual content to work with
+      # This prevents processing empty responses that would result in meaningless summaries
+      if !content || content.strip.empty?
+        raise "Empty content extracted for URL: #{story['url']}"
+      end
+
+      # Log successful extraction for monitoring
+      Rails.logger.info("STAGE 1 COMPLETE: Successfully extracted technical content")
+
+      # Log citation count for analytics and debugging
+      unless citations.empty?
+        Rails.logger.info("Found #{citations.length} citations in extracted content")
+      end
+
+      # Return both the extracted content and any citations as an array
+      # This will be used by the summarization stage
+      [ content, citations ]
+    rescue StandardError => e
+      # Log the specific error details for debugging
+      Rails.logger.error("Content extraction failed: #{e.message}")
+
+      # Re-raise with a more user-friendly message that maintains the original error context
+      raise "Failed to extract article content: #{e.message}"
+    end
+  end
+
+  # STAGE 2: Generate dev-focused summary from technical content
+  # @param content [String] the technical content from Stage 1
+  # @param citations [Array] array of citation URLs from Stage 1
+  # @return [String] the dev-focused summary
+  # @raise [RuntimeError] if summarization fails
+  def generate_dev_summary(content, citations = [])
+    # Log that we're starting the dev summary generation process
+    Rails.logger.info("STAGE 2: Generating dev-focused summary for story ##{story['id']}")
+
+    # Create the system and user prompts for dev summarization
+    system_prompt, user_prompt = create_dev_summary_prompts(content, citations)
+
+    begin
+      # Call the summary adapter to generate the dev-focused summary
+      summary = summary_adapter.complete(system_prompt, user_prompt)
 
       # Check if the generated summary is empty or invalid
       if !summary || summary.strip.empty?
         # Raise an error if we got an empty summary
-        raise "Empty summary generated for URL: #{story['url']}"
+        raise "Empty dev summary generated for URL: #{story['url']}"
       end
 
       # Log that the summarization completed successfully
-      Rails.logger.info("COMPLETE: Successfully generated summary for story ##{story['id']}")
+      Rails.logger.info("STAGE 2 COMPLETE: Successfully generated dev-focused summary")
 
       # Return the generated summary
       summary
     rescue StandardError => e
       # Log the error that occurred during summarization
-      Rails.logger.error("Summarization failed: #{e.message}")
+      Rails.logger.error("Dev summarization failed: #{e.message}")
 
       # Re-raise the error with a more descriptive message
-      raise "Failed to summarize article: #{e.message}"
+      raise "Failed to generate dev summary: #{e.message}"
     end
   end
 
-  # Generate a hash for URL to use as cache key
-  # @param url [String] the URL to hash
-  # @return [String] the SHA-256 hash string of the URL
-  def generate_content_hash(url)
-    # Create a SHA-256 hash of the URL for caching purposes
-    Digest::SHA256.hexdigest(url)
-  end
-
   # Check if a summary exists in cache for given content
-  # @param content_hash [String] the hash of the content
   # @return [String, nil] the cached summary or nil if not found
-  def get_cached_summary(content_hash)
-    # Look up the summary in our cache using the hash
-    summary_cache[content_hash]
+  def get_cached_summary
+    # Look up the summary in Rails cache
+    Rails.cache.read(cache_key)
   end
 
   # Store a summary in the cache
-  # @param content_hash [String] the hash of the content
   # @param summary [String] the summary to cache
-  def cache_summary(content_hash, summary)
-    # Store the summary in our cache using the hash as key
-    summary_cache[content_hash] = summary
+  def cache_summary_if_enabled(summary)
+    # Store the summary in Rails cache if caching is enabled
+    Rails.cache.write(cache_key, summary) if options[:cache_summaries]
+  end
+
+  # Generate a cache key for the current story
+  # @return [String] the formatted cache key
+  def cache_key
+    # Format: hnsum:story:summary:{hash}
+    "hnsum:story:summary:#{content_hash}".freeze
   end
 
   # Fetch a story's details
@@ -161,11 +242,10 @@ class Ai::HnStorySummarizer
     hn_client.get_item(story_id)
   end
 
-  # Create prompts for article summarization
-  # @param story [Hash] the story being summarized
+  # Create prompts for Stage 1: Technical content extraction
   # @return [Array<String>] [system_prompt, user_prompt]
-  def create_prompts(story)
-    # System prompt instructs the model on the summarization task
+  def create_extraction_prompts
+    # System prompt instructs the model on the extraction task
     system_prompt = <<~SYSTEM
       You are an expert at accessing URLs and creating comprehensive technical summaries for developer audiences.
 
@@ -181,7 +261,7 @@ class Ai::HnStorySummarizer
       It should be written for a sophisticated technical audience of software developers and engineers.
     SYSTEM
 
-    # User prompt specifies the URL and summarization requirements
+    # User prompt specifies the URL and extraction requirements
     user_prompt = <<~USER
       Please access this URL and provide an exhaustive technical rundown: #{story['url']}
 
@@ -204,8 +284,56 @@ class Ai::HnStorySummarizer
       instead, return the overview by itself.
     USER
 
-    puts "SYSTEM PROMPT: #{system_prompt}"
-    puts "USER PROMPT: #{user_prompt}"
+    # Return an array containing both the system prompt and user prompt
+    [ system_prompt, user_prompt ]
+  end
+
+  # Create prompts for Stage 2: Dev-focused summary generation
+  # @param content [String] the technical content from Stage 1
+  # @param citations [Array] array of citation URLs from Stage 1
+  # @return [Array<String>] [system_prompt, user_prompt]
+  def create_dev_summary_prompts(content, citations = [])
+    # Instructions that we'll use both in the system prompt and the user prompt
+    instructions = <<~SYSTEM
+      You're an expert at summarizing articles shared on Hacker News for a blunt developer audience.
+      When provided with an article's detailed technical overview, you prepare the blunt, dev-focused summary.
+      Maintain key technical details, but make it a little more concise and engaging.
+      Reproduce important data points, specific quotes, URLs., etc., **verbatim**. Do NOT make details up.
+      In essence, your summary should be just as informative as the summary you're provided with, but more readable and engaging.
+
+      Produce your summary in *valid Markdown*. Return JUST the summary, no preface or post-text.
+    SYSTEM
+
+    # Set the system prompt to the instructions
+    system_prompt = instructions
+
+    # Format citations as numbered references if present
+    formatted_citations = ""
+    unless citations.empty?
+      formatted_citations = "\n\n## Citations\n\n"
+      citations.each_with_index do |citation, index|
+        formatted_citations += "[#{index + 1}] #{citation}\n"
+      end
+    end
+
+    # User prompt provides the technical content for summarization
+    user_prompt = <<~USER
+      Here is the technical overview of an article titled "#{story['title']}" that was posted on Hacker News.
+
+      I will provide the technical overview for you, and then review your instructions to generate the summary.
+
+      BEGIN TECHNICAL OVERVIEW
+
+      #{content}
+      #{formatted_citations}
+      END TECHNICAL OVERVIEW
+
+      ----------------------
+
+      To create your summary, please follow these instructions:
+
+      #{instructions}
+    USER
 
     # Return an array containing both the system prompt and user prompt
     [ system_prompt, user_prompt ]

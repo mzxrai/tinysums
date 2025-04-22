@@ -20,8 +20,7 @@ class Ai::Adapters::PerplexityAdapter < Ai::BaseAiAdapter
       # Default options for Perplexity's Sonar-Pro model
       {
         model: "sonar-pro", # Sonar-Pro is their most capable model
-        max_tokens: 4096,   # Default max tokens for output
-        temperature: 0.2    # Low temperature for more deterministic outputs
+        max_tokens: 4096    # Default max tokens for output
       }.freeze
     end
   end
@@ -70,6 +69,8 @@ class Ai::Adapters::PerplexityAdapter < Ai::BaseAiAdapter
 
       # Process the response
       if response.success?
+        puts response.body
+
         # Extract the content from the response
         response.body["choices"][0]["message"]["content"]
       else

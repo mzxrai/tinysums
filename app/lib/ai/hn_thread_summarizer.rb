@@ -29,39 +29,40 @@ class Ai::HnThreadSummarizer
   }.freeze
 
   # Define attribute readers for instance variables
-  attr_reader :adapter, :hn_client, :options
+  attr_reader :adapter, :hn_client, :options, :story
 
   # Initialize the thread summarizer
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summarization
-  # @param hn_client [HnApiClient] client for interacting with HN API
+  # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] options to override defaults
-  def initialize(adapter, hn_client = nil, options = {})
+  def initialize(adapter, story_id, options = {})
     # Save the AI adapter for making summarization requests
     @adapter = adapter
 
-    # Create or use provided HN API client
-    @hn_client = hn_client || HnApiClient.new
+    # Create a new HN API client
+    @hn_client = HnApiClient.new
+
+    # Fetch the story with all its comments
+    @story = fetch_story_with_comments(story_id)
 
     # Merge default options with provided options
     @options = DEFAULT_OPTIONS.merge(options)
   end
 
-  # Generate a comprehensive summary of a HN story's comments
-  # @param story_id [Integer] the HN story ID to summarize
+  # Generate a comprehensive summary of the HN story's comments
   # @return [String] the generated summary or nil if story not found
-  def generate_thread_summary(story_id)
-    # Fetch the story with all its comments
-    story = fetch_story_with_comments(story_id)
+  def generate_thread_summary
+    # Return nil if story wasn't found
     return nil unless story
 
     # Add author karma to comments for scoring
-    enrich_comments_with_karma(story)
+    enrich_comments_with_karma
 
     # Score and select top-level comments for summarization
-    selected_comments = select_comments_for_summarization(story)
+    selected_comments = select_comments_for_summarization
 
     # Format selected comments for the AI
-    formatted_content = format_comments_for_summarization(story, selected_comments)
+    formatted_content = format_comments_for_summarization(selected_comments)
 
     # Truncate content if it exceeds max input size
     if exceeds_max_input_size?(formatted_content)
@@ -70,33 +71,42 @@ class Ai::HnThreadSummarizer
     end
 
     # Generate the summary from the (potentially truncated) content
-    generate_summary(story, formatted_content)
+    generate_summary(formatted_content)
   end
 
   private
 
-  # Generate a hash for content to use as cache key
-  # @param content [String] the content to hash
-  # @return [String] the SHA-256 hash string of the content
-  def generate_content_hash(content)
+  # Get the content hash for the current content
+  # This is memoized so it's only calculated once per prompt
+  # @param prompt_content [String] the content to hash
+  # @return [String] the SHA-256 hash for the content
+  def content_hash(prompt_content)
     # Create a SHA-256 hash of the content for caching purposes
-    Digest::SHA256.hexdigest(content)
+    Digest::SHA256.hexdigest(prompt_content)
   end
 
   # Check if a summary exists in cache for given content
   # @param content_hash [String] the hash of the content
   # @return [String, nil] the cached summary or nil if not found
   def get_cached_summary(content_hash)
-    # Look up the summary in our cache using the hash
-    summary_cache[content_hash]
+    # Look up the summary in Rails cache
+    Rails.cache.read(cache_key(content_hash))
   end
 
   # Store a summary in the cache
   # @param content_hash [String] the hash of the content
   # @param summary [String] the summary to cache
-  def cache_summary(content_hash, summary)
-    # Store the summary in our cache using the hash as key
-    summary_cache[content_hash] = summary
+  def cache_summary_if_enabled(content_hash, summary)
+    # Store the summary in Rails cache if caching is enabled
+    Rails.cache.write(cache_key(content_hash), summary) if options[:cache_summaries]
+  end
+
+  # Generate a cache key for a given content hash
+  # @param content_hash [String] the hash to create a key for
+  # @return [String] the formatted cache key
+  def cache_key(content_hash)
+    # Format: hnsum:thread:summary:{hash}
+    "hnsum:thread:summary:#{content_hash}".freeze
   end
 
   # Fetch a story with its complete comment tree
@@ -118,8 +128,7 @@ class Ai::HnThreadSummarizer
   end
 
   # Add karma information to comments to aid in selection/scoring
-  # @param story [Hash] the story with its comment tree
-  def enrich_comments_with_karma(story)
+  def enrich_comments_with_karma
     # Process each top-level comment
     story["comments"].each do |comment|
       # Add author karma to this comment
@@ -164,9 +173,8 @@ class Ai::HnThreadSummarizer
   end
 
   # Select top-level comments for summarization based on scoring
-  # @param story [Hash] the story with its comment tree
   # @return [Array<Hash>] selected comments for summarization
-  def select_comments_for_summarization(story)
+  def select_comments_for_summarization
     # Count total comments in the story
     total_comments = story["descendants"] || 0
 
@@ -332,10 +340,9 @@ class Ai::HnThreadSummarizer
   end
 
   # Format selected comments for AI summarization
-  # @param story [Hash] the story being summarized
   # @param selected_comments [Array<Hash>] selected comments
   # @return [String] formatted text for the AI
-  def format_comments_for_summarization(story, selected_comments)
+  def format_comments_for_summarization(selected_comments)
     # Build the header with story info
     header = "# Hacker News Discussion: #{story['title']}\n\n"
 
@@ -439,18 +446,17 @@ class Ai::HnThreadSummarizer
   end
 
   # Generate summary for a thread
-  # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
   # @return [String] the generated summary
-  def generate_summary(story, content)
+  def generate_summary(content)
     # Create system and user prompts
-    system_prompt, user_prompt = create_summary_prompt(story, content)
+    system_prompt, user_prompt = create_summary_prompt(content)
 
     # Use the user_prompt (which contains the actual content) for the cache hash
-    content_hash = generate_content_hash(user_prompt)
+    hash = content_hash(user_prompt)
 
     # Check if caching is enabled and if there's a cached summary
-    if options[:cache_summaries] && (cached_summary = get_cached_summary(content_hash))
+    if options[:cache_summaries] && (cached_summary = get_cached_summary(hash))
       # Log that we're using a cached summary
       Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']}")
 
@@ -468,17 +474,16 @@ class Ai::HnThreadSummarizer
     Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")
 
     # Store in cache if caching is enabled
-    cache_summary(content_hash, summary) if options[:cache_summaries]
+    cache_summary_if_enabled(hash, summary)
 
     # Return the generated summary
     summary
   end
 
   # Create prompt for summarization
-  # @param story [Hash] the story being summarized
   # @param content [String] the formatted content
   # @return [Array<String>] An array containing [system_prompt, user_prompt]
-  def create_summary_prompt(story, content)
+  def create_summary_prompt(content)
     # Define the instructions for the task
     instructions = <<~INSTRUCTIONS
       ## Instructions

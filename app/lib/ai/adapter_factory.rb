@@ -27,9 +27,13 @@ class Ai::AdapterFactory
     perplexity: "Ai::Adapters::PerplexityAdapter"
   }.freeze
 
-  # The default AI provider to use when none is specified
+  # The default AI provider to use for summary generation when none is specified
   # @return [Symbol] Default provider symbol
-  DEFAULT_PROVIDER = :google
+  DEFAULT_SUMMARY_PROVIDER = :google
+
+  # The default AI provider to use for extraction when none is specified
+  # @return [Symbol] Default provider symbol
+  DEFAULT_EXTRACTION_PROVIDER = :perplexity
 
   class << self
     # Creates an AI adapter instance for the specified provider
@@ -62,21 +66,16 @@ class Ai::AdapterFactory
       adapter_class.new(options)
     end
 
-    # Retrieves the default adapter based on application configuration
-    # The provider and API key are determined by:
-    # 1. Rails configuration (config.x.ai.provider and config.x.ai.api_key)
-    # 2. Environment variables (fallback)
-    # @param options [Hash] Optional configuration to override defaults
-    # @return [Ai::BaseAiAdapter] An instance of the default adapter
-    # @raise [ArgumentError] If no API key is configured
-    # @example
-    #   adapter = Ai::AdapterFactory.default_adapter
-    def default_adapter(options = {})
-      # Determine provider from Rails config or fallback to DEFAULT_PROVIDER
-      provider = Rails.application.config.x.ai.provider.presence || DEFAULT_PROVIDER
+    # Creates an instance of the default summary adapter and returns it
+    # @return [Ai::BaseAiAdapter] An instance of the default summary adapter
+    def default_summary_adapter
+      create(DEFAULT_SUMMARY_PROVIDER)
+    end
 
-      # Create adapter instance
-      create(provider, options)
+    # Creates an instance of the default extraction adapter and returns it
+    # @return [Ai::BaseAiAdapter] An instance of the default extraction adapter
+    def default_extraction_adapter
+      create(DEFAULT_EXTRACTION_PROVIDER)
     end
   end
 end

@@ -23,10 +23,14 @@ class Ai::SummaryGenerator
     @options = DEFAULT_OPTIONS.merge(options)
 
     # Create a thread summarizer using our adapter
-    @thread_summarizer = Ai::HnThreadSummarizer.new(adapter)
+    @thread_summarizer = Ai::HnThreadSummarizer.new(adapter, story_id)
 
     # Create a story summarizer using our adapter
-    @story_summarizer = Ai::HnStorySummarizer.new(adapter)
+    @story_summarizer = Ai::HnStorySummarizer.new(
+      Ai::AdapterFactory.default_extraction_adapter,
+      adapter,
+      story_id
+    )
 
     # Initialize the article content instance var
     @article_content = nil
@@ -51,7 +55,7 @@ class Ai::SummaryGenerator
     Rails.logger.info("Generating story summary with #{adapter.class.name}")
 
     # Use our specialized story summarizer
-    story_summarizer.generate_story_summary(story_id)
+    story_summarizer.generate_story_summary
   end
 
   # Generate a summary of an article's comments
@@ -61,6 +65,6 @@ class Ai::SummaryGenerator
     Rails.logger.info("Generating comments summary for story ##{story_id} with #{adapter.class.name}")
 
     # Use our specialized thread summarizer for HN comments
-    thread_summarizer.generate_thread_summary(story_id)
+    thread_summarizer.generate_thread_summary
   end
 end
