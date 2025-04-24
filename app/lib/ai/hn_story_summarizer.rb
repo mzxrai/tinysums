@@ -303,6 +303,8 @@ class Ai::HnStorySummarizer
       Developers will be presented with many of these summaries on the same webpage side by side, so speaking to them
       directly would be redundant and annoying.
 
+      If you include URLs in your summary, format them as Markdown links so users can easily click through.
+
       Simply return the summary starting with the first Markdown heading.
     SYSTEM
 

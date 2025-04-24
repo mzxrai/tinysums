@@ -521,6 +521,7 @@ class Ai::HnThreadSummarizer
         them using backticks, like this: `username`. If you choose to reference specific comments, which is recommended,
         do not reference them by their index (e.g., "1.2.1"), but rather simply use the author's username (e.g, "`mbm`
         thinks that...").
+      - If you include URLs in your summary, format them as Markdown links so users can easily click through.
 
       ### What to avoid doing
 
@@ -534,7 +535,7 @@ class Ai::HnThreadSummarizer
 
       Return your summary in *valid Markdown*. Do not include a descriptive intro such as "Here is a summary of the
       discussion..."; instead, simply return the summary itself starting with the first Markdown heading, which should
-      be a second-level ("##" heading). Don't title your summary a "summary for devs" or speak to developers directly;
+      be a second-level ("##") heading. Don't title your summary a "summary for devs" or speak to developers directly;
       the summary is *for* them, but not written *to* them. Developers will be presented with many of these summaries on
       the same webpage side by side, so speaking to them directly would be redundant and annoying.
 
