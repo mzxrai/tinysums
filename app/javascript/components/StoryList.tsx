@@ -46,6 +46,28 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
   // Add a log to see what props are actually received
   console.log('StoryList received stories:', stories);
 
+  // Format the last updated time
+  const getLastUpdatedTime = () => {
+    if (!stories.length) return "N/A";
+
+    // Find the most recent update time across all stories
+    const latestTime = Math.max(
+      ...stories
+        .filter(story => story.status?.updatedAt)
+        .map(story => story.status?.updatedAt || 0)
+    );
+
+    // Format the timestamp
+    return latestTime > 0
+      ? new Date(latestTime * 1000).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      : "N/A";
+  };
+
   // Check if stories is actually an array before trying to map
   if (!Array.isArray(stories)) {
     // Log an error if stories is not an array
@@ -59,10 +81,13 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
     // Main container div
     <div className="w-full">
       {/* Inner container for centering content and applying padding */}
-      {/* Uses max-width for larger screens, padding adjusts for smaller screens */}
       <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
-        {/* Page Header - Removed as it's assumed to be in a separate layout header now */}
-        {/* <h1 className="text-2xl font-semibold mb-6 text-zinc-800 dark:text-zinc-100">Stories</h1> */}
+        {/* Simple text attribution in the top right */}
+        <div className="flex justify-end mb-4">
+          <div className="text-xs text-gray-500 dark:text-zinc-400 whitespace-nowrap">
+            Summaries by <span className="font-bold">Gemini 2.5 Pro</span> | Last Updated {getLastUpdatedTime()}
+          </div>
+        </div>
 
         {/* Stories List Container */}
         {/* Light mode: Transparent background (inherits page bg), no ring */}
@@ -227,6 +252,7 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
                       storySummary={story.story_summary}
                       commentsSummary={story.comments_summary}
                       status={story.status}
+                      hasUrl={!!story.url}
                     />
                   </div>
                 )}

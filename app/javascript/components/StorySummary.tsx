@@ -35,6 +35,8 @@ interface StorySummaryProps {
     comments: string;
     updatedAt: number;
   };
+  /** Whether the story has a URL (for Ask HN, Show HN posts) */
+  hasUrl?: boolean;
 }
 
 /**
@@ -44,33 +46,43 @@ interface StorySummaryProps {
 export const StorySummary: React.FC<StorySummaryProps> = ({
   storySummary,
   commentsSummary,
-  status
+  status,
+  hasUrl = true
 }) => {
   // Single state to track if the entire summary is expanded
   const [isExpanded, setIsExpanded] = useState(false);
 
   /**
-   * Gets a preview of the text (first 140 characters)
-   * @param text - The full text to get a preview from
-   * @returns A shortened preview of the text with ellipsis if needed
+   * Extracts the first Markdown heading from the text
+   * @param text - The full text to extract the heading from
+   * @returns Just the first heading or a short preview if no heading is found
    */
-  const getPreview = (text?: string) => {
+  const extractFirstHeading = (text?: string) => {
     if (!text) return '';
-    // Return the first ~140 characters plus ellipsis if longer
-    return text.length > 140 ? `${text.substring(0, 140)}...` : text;
+
+    // Look for a Markdown heading (starts with one or more # followed by text)
+    const headingMatch = text.match(/^(#{1,6}\s+.+?)($|\n)/m);
+
+    if (headingMatch) {
+      return headingMatch[1];
+    }
+
+    // If no heading found, return a short preview
+    const firstLineMatch = text.match(/^(.{1,100})($|\n)/);
+    return firstLineMatch ? `${firstLineMatch[1]}...` : `${text.substring(0, 100)}...`;
   };
 
   /**
    * Renders markdown content with proper sanitization
    * @param text - The markdown text to render
-   * @param isPreview - Whether this is a preview (truncated) version
+   * @param isPreview - Whether this is a preview (first heading only) version
    * @returns React component with rendered markdown
    */
   const renderMarkdown = (text?: string, isPreview: boolean = false) => {
     if (!text) return null;
 
-    // For preview, use the truncated text
-    const contentToRender = isPreview ? getPreview(text) : text;
+    // For preview, use just the first heading
+    const contentToRender = isPreview ? extractFirstHeading(text) : text;
 
     return (
       <ReactMarkdown
@@ -113,76 +125,79 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
    * @returns Placeholder text to display
    */
   const getPlaceholderText = (type: 'content' | 'comments', currentStatus?: string) => {
-    if (!currentStatus) return `${type === 'content' ? 'Content' : 'Comment'} summary not available`;
+    if (!currentStatus) return `Generating... check back soon.`;
 
     switch (currentStatus) {
       case 'pending':
-        return `${type === 'content' ? 'Content' : 'Comment'} summary is being generated...`;
+        return `Generating... check back soon.`;
       case 'retrying':
-        return `Retrying ${type === 'content' ? 'content' : 'comment'} summary generation...`;
+        return `Retrying generation... check back soon.`;
       case 'failed':
-        return `${type === 'content' ? 'Content' : 'Comment'} summary generation failed`;
+        return `${type === 'content' ? 'Story' : 'Comments'} summary generation failed`;
+      case 'completed':
+        return 'Complete!';
       default:
-        return `${type === 'content' ? 'Content' : 'Comment'} summary not available`;
+        return `Generating... check back soon.`;
     }
   };
 
-  // If neither summary exists or is ready, render nothing
-  if (!isContentReady() && !isCommentsReady() && !status) return null;
+  // Check if we have any completed summaries
+  const hasContentSummary = isContentReady();
+  const hasCommentsSummary = isCommentsReady();
 
-  // Check if the content is long enough to need expansion or if there's a comment summary
+  // If no summaries are ready, just show a simple placeholder
+  if (!hasContentSummary && !hasCommentsSummary) {
+    return (
+      <div className="mt-2 text-xs leading-normal">
+        <div className="italic text-[#828282] dark:text-zinc-400">
+          Generating summaries... check back soon.
+        </div>
+      </div>
+    );
+  }
+
+  // Only show the expand/collapse button if we have long enough content or comments summary
   const needsExpansion =
-    (storySummary && storySummary.length > 140) ||
-    (status && status.comments !== "pending");
+    (hasContentSummary && storySummary && storySummary.length > 100) ||
+    (hasCommentsSummary && commentsSummary && commentsSummary.length > 100);
 
   // Return the summary component
   return (
-    <div className="mt-2 text-xs leading-normal border-l-2 border-l-orange-200 dark:border-l-zinc-700 pl-3">
-      {/* Content Summary Section */}
-      {(storySummary || (status && status.content)) && (
-        <div className="mb-2">
-          <div className="flex items-center mb-1">
-            <span className="font-medium text-[#828282] dark:text-zinc-400 text-xs">
-              Summary
+    <div className="mt-2 text-xs leading-normal">
+      {/* Content Summary Section - Only show for stories with URLs and if content summary exists */}
+      {hasContentSummary && hasUrl && (
+        <div className="mb-3 border-l-4 border-l-orange-300 dark:border-l-orange-700/50 rounded-md bg-orange-50/30 dark:bg-zinc-800/70 pb-1 pt-3 px-6 mr-4">
+          <div className="flex items-center mb-3">
+            <span className="font-medium bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 text-xs px-2 py-0.5 rounded-full">
+              Article Summary
             </span>
           </div>
 
           {/* Show either preview or full content based on expanded state */}
-          <div className="text-black dark:text-zinc-300 markdown-content">
-            {isContentReady() ? (
-              // Content is ready, show actual content
-              isExpanded ? (
-                renderMarkdown(storySummary)
-              ) : (
-                renderMarkdown(storySummary, true)
-              )
-            ) : (
-              // Content is not ready, show placeholder
-              <span className="italic text-[#828282] dark:text-zinc-500">
-                {getPlaceholderText('content', status?.content)}
-              </span>
-            )}
+          <div className="text-black dark:text-zinc-200 markdown-content">
+            {isExpanded ? renderMarkdown(storySummary) : renderMarkdown(storySummary, true)}
           </div>
         </div>
       )}
 
-      {/* Comment Summary Section - Only visible when expanded */}
-      {isExpanded && (commentsSummary || (status && status.comments)) && (
-        <div className="mb-2">
-          <div className="flex items-center mb-1">
-            <span className="font-medium text-[#828282] dark:text-zinc-400 text-xs">
-              Comments
+      {/* Comments Summary Section - Show for stories without URLs, stories with just comments, or when expanded */}
+      {(hasCommentsSummary || (!hasUrl && !hasContentSummary) || (isExpanded && hasUrl)) && (
+        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-2 pt-3 px-6 mr-4">
+          <div className="flex items-center mb-3">
+            <span className="font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
+              Comments Summary
             </span>
           </div>
 
-          {/* Show comments depending on ready state */}
-          <div className="text-black dark:text-zinc-300 markdown-content">
-            {isCommentsReady() ? (
-              // Comments are ready, show actual content
-              renderMarkdown(commentsSummary)
+          <div className="text-black dark:text-zinc-200 markdown-content">
+            {hasCommentsSummary ? (
+              // Comments are ready, show preview or full content based on expanded state
+              !hasUrl && !isExpanded ?
+                renderMarkdown(commentsSummary, true) :
+                renderMarkdown(commentsSummary)
             ) : (
-              // Comments are not ready, show placeholder
-              <span className="italic text-[#828282] dark:text-zinc-500">
+              // Comments are not ready, show placeholder (only shown when expanded or for stories without URLs)
+              <span className="italic text-[#828282] dark:text-zinc-400">
                 {getPlaceholderText('comments', status?.comments)}
               </span>
             )}
@@ -190,14 +205,14 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
         </div>
       )}
 
-      {/* Show expand/collapse button at the bottom if needed */}
+      {/* Show expand/collapse button if we have summaries worth expanding */}
       {needsExpansion && (
-        <div className="mt-2">
+        <div className="mt-3 text-left">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-[#828282] dark:text-zinc-500 hover:underline text-xs cursor-pointer"
+            className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm"
           >
-            {isExpanded ? 'Show less' : 'More'}
+            {isExpanded ? 'Show less' : 'Show more'}
           </button>
         </div>
       )}
