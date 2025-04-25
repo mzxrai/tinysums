@@ -68,117 +68,6 @@ class Ai::HnThreadSummarizer
     generate_summary(formatted_content)
   end
 
-  # Check if the comments for a story have changed since the last summary
-  # @param latest_summary_time [Time] time when the last summary was generated
-  # @return [Boolean] true if comments have changed, false otherwise
-  def comments_changed?(latest_summary_time)
-    # Always return true if no previous summary time provided
-    return true unless latest_summary_time
-
-    # Convert the provided time to unix timestamp for direct comparison
-    last_summary_timestamp = latest_summary_time.to_i
-
-    # Find the timestamp of the most recent comment in the story
-    latest_comment_time = find_latest_comment_time(story)
-
-    # Return true if there are newer comments or the comment count has changed
-    latest_comment_time > last_summary_timestamp ||
-      descendants_changed?(last_summary_timestamp)
-  end
-
-  # Find the timestamp of the latest comment in a thread
-  # @param comment_thread [Hash] the comment thread to search
-  # @return [Integer] unix timestamp of the latest comment
-  def find_latest_comment_time(comment_thread)
-    # Return 0 if the thread is nil
-    return 0 unless comment_thread
-
-    # Start with the story's own timestamp as the baseline
-    latest_time = comment_thread["time"] || 0
-
-    # Check all comments in the thread to find the most recent timestamp
-    if has_comments?(comment_thread)
-      # Process all comments to find the latest timestamp
-      latest_time = find_latest_time_in_comments(comment_thread["comments"], latest_time)
-    end
-
-    # Return the latest timestamp found
-    latest_time
-  end
-
-  # Helper to check if a thread has comments
-  # @param thread [Hash] the thread to check
-  # @return [Boolean] true if thread has comments
-  def has_comments?(thread)
-    # Check both that comments array exists and is not empty
-    thread["comments"] && !thread["comments"].empty?
-  end
-
-  # Find latest time in a list of comments
-  # @param comments [Array] array of comments
-  # @param latest_time [Integer] current latest time
-  # @return [Integer] updated latest time
-  def find_latest_time_in_comments(comments, latest_time)
-    # Iterate through each comment to find the latest timestamp
-    comments.each do |comment|
-      # Get this comment's timestamp (default to 0 if missing)
-      comment_time = comment["time"] || 0
-
-      # Update the latest time if this comment is more recent
-      latest_time = [ latest_time, comment_time ].max
-
-      # Check for replies to this comment
-      if comment["replies"] && !comment["replies"].empty?
-        # Process replies recursively to find latest timestamp
-        latest_time = find_latest_time_in_replies(comment["replies"], latest_time)
-      end
-    end
-
-    # Return the latest timestamp found
-    latest_time
-  end
-
-  # Helper to find latest comment time in replies recursively
-  # @param replies [Array] array of reply comments
-  # @param latest_time [Integer] current latest time
-  # @return [Integer] updated latest time
-  def find_latest_time_in_replies(replies, latest_time)
-    # Process each reply to find the latest timestamp
-    replies.each do |reply|
-      # Get this reply's timestamp (default to 0 if missing)
-      reply_time = reply["time"] || 0
-
-      # Update the latest time if this reply is more recent
-      latest_time = [ latest_time, reply_time ].max
-
-      # Check for nested replies
-      if reply["replies"] && !reply["replies"].empty?
-        # Process nested replies recursively
-        latest_time = find_latest_time_in_replies(reply["replies"], latest_time)
-      end
-    end
-
-    # Return the latest timestamp found
-    latest_time
-  end
-
-  # Check if the number of descendants (comments) has changed
-  # @param last_summary_timestamp [Integer] time when the last summary was generated
-  # @return [Boolean] true if descendant count has changed, false otherwise
-  def descendants_changed?(last_summary_timestamp)
-    # Retrieve the previously cached comment count for this story
-    cached_count = Rails.cache.read("hnsum:comment_count:#{story['id']}")
-
-    # Get the current comment count from the story data
-    current_count = story["descendants"] || 0
-
-    # Store the current count in cache for future comparisons
-    Rails.cache.write("hnsum:comment_count:#{story['id']}", current_count)
-
-    # Return true if we don't have a cached count or if the count has changed
-    cached_count.nil? || cached_count != current_count
-  end
-
   private
 
   # Truncate content if it exceeds maximum size
@@ -210,19 +99,6 @@ class Ai::HnThreadSummarizer
 
     # Return the story with its full comment tree
     story
-  end
-
-  # Log completion of fetch operation
-  # @param story_id [Integer] the HN story ID
-  # @param story [Hash] the fetched story
-  def log_fetch_completion(story_id, story)
-    # Calculate the number of comments (0 if story not found)
-    comment_count = story ? story["descendants"] || 0 : 0
-
-    # Log the API call completion with the comment count
-    Rails.logger.info(
-      "HN API CALL COMPLETE: Fetched story ##{story_id} with #{comment_count} comments"
-    )
   end
 
   # Add karma information to comments to aid in selection/scoring
@@ -260,23 +136,6 @@ class Ai::HnThreadSummarizer
 
     # Log the completion of the user fetch
     log_user_fetch_complete(comment["by"], user_karma)
-  end
-
-  # Log start of user fetch operation
-  # @param username [String] the username being fetched
-  def log_user_fetch_start(username)
-    # Log the API call start with the username
-    Rails.logger.info("HN API CALL: Fetching user #{username} for karma lookup")
-  end
-
-  # Log completion of user fetch operation
-  # @param username [String] the username that was fetched
-  # @param karma [Integer] the user's karma
-  def log_user_fetch_complete(username, karma)
-    # Log the API call completion with username and karma
-    Rails.logger.info(
-      "HN API CALL COMPLETE: Fetched user #{username} with karma #{karma}"
-    )
   end
 
   # Process replies recursively to add karma
@@ -695,19 +554,6 @@ class Ai::HnThreadSummarizer
     summary
   end
 
-  # Log that summary generation is starting
-  def log_summary_generation_start
-    # Log message indicating summary generation has begun
-    Rails.logger.info("Generating summary for story ##{story['id']}")
-  end
-
-  # Log that summary generation is complete
-  # @param summary [String] the generated summary
-  def log_summary_generation_end(summary)
-    # Log message with the completed summary text
-    Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")
-  end
-
   # Create prompt for summarization
   # @param content [String] the formatted content
   # @return [Array<String>] An array containing [system_prompt, user_prompt]
@@ -797,5 +643,52 @@ class Ai::HnThreadSummarizer
 
     # Return both prompts in an array
     [ system_prompt, user_prompt ]
+  end
+
+  #
+  # Logging methods
+  #
+
+  # Log that summary generation is starting
+  def log_summary_generation_start
+    # Log message indicating summary generation has begun
+    Rails.logger.info("Generating summary for story ##{story['id']}")
+  end
+
+  # Log that summary generation is complete
+  # @param summary [String] the generated summary
+  def log_summary_generation_end(summary)
+    # Log message with the completed summary text
+    Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")
+  end
+
+  # Log start of user fetch operation
+  # @param username [String] the username being fetched
+  def log_user_fetch_start(username)
+    # Log the API call start with the username
+    Rails.logger.info("HN API CALL: Fetching user #{username} for karma lookup")
+  end
+
+  # Log completion of user fetch operation
+  # @param username [String] the username that was fetched
+  # @param karma [Integer] the user's karma
+  def log_user_fetch_complete(username, karma)
+    # Log the API call completion with username and karma
+    Rails.logger.info(
+      "HN API CALL COMPLETE: Fetched user #{username} with karma #{karma}"
+    )
+  end
+
+  # Log completion of fetch operation
+  # @param story_id [Integer] the HN story ID
+  # @param story [Hash] the fetched story
+  def log_fetch_completion(story_id, story)
+    # Calculate the number of comments (0 if story not found)
+    comment_count = story ? story["descendants"] || 0 : 0
+
+    # Log the API call completion with the comment count
+    Rails.logger.info(
+      "HN API CALL COMPLETE: Fetched story ##{story_id} with #{comment_count} comments"
+    )
   end
 end

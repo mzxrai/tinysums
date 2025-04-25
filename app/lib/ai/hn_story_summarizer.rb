@@ -243,6 +243,7 @@ class Ai::HnStorySummarizer
       You are an expert at accessing URLs and creating comprehensive technical summaries for developer audiences.
 
       When given a URL, your task is to:
+
       1. Access the URL and read the entire article
       2. Create an exhaustive technical summary that captures ALL important information
       3. Include verbatim quotes of key points, maintaining their exact wording
@@ -272,6 +273,9 @@ class Ai::HnStorySummarizer
       - Uses simple, understandable, blunt language avoiding unnecessarily large words
 
       Ensure the overview is comprehensive while being well-organized and readable.
+
+      If the article includes code snippets or code samples, and you choose to include them in your rundown, reproduce
+      them **verbatim**. Do not modify them in any way.
 
       Format the overview in valid Markdown. Don't include any introductory text like "Here's an overview...";
       instead, return the overview by itself.
@@ -314,7 +318,13 @@ class Ai::HnStorySummarizer
 
       If you include URLs in your summary, format them as Markdown links so users can easily click through.
 
-      Simply return the summary starting with the first Markdown heading.
+      If the overview we provide you includes code snippets or code samples, and you choose to include them in your
+      summary, reproduce them **verbatim**. Do not modify them in any way.
+
+      ---
+
+      Simply return your summary starting with the first Markdown heading, which should be descriptive and
+      attention-grabbing.
     SYSTEM
 
     # Set the system prompt to the instructions
