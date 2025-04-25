@@ -59,7 +59,7 @@
 }
 
 /* Dark mode pre blocks */
-.dark .markdown-content pre {
+.markdown-content pre:where([data-theme=dark], [data-theme=dark] *) {
   background-color: rgba(30, 41, 59, 0.7); /* dark with transparency */
   border: 1px solid rgba(51, 65, 85, 0.8);
 }
@@ -79,10 +79,11 @@
 }
 
 /* Dark mode inline code */
-.dark .markdown-content code {
-  color: #e2e8f0; /* light gray for dark mode */
-  background-color: rgba(30, 41, 59, 0.5); /* subtle dark background */
-  border: 1px solid rgba(51, 65, 85, 0.7);
+.markdown-content code:where([data-theme=dark], [data-theme=dark] *) {
+  color: #ff6b81; /* reddish color for dark mode */
+  background-color: transparent; /* no background */
+  border: none; /* no border */
+  font-weight: 500; /* slightly bolder */
 }
 
 /* Special handling for code in headings */
@@ -104,6 +105,12 @@
   overflow-x: auto;
   position: static;
   top: 0;
+}
+
+/* Ensure code blocks in dark mode keep their styling */
+.markdown-content pre code:where([data-theme=dark], [data-theme=dark] *) {
+  color: #e2e8f0; /* light gray for code blocks */
+  background-color: transparent; /* already transparent from pre code */
 }
 
 .markdown-content p code {

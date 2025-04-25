@@ -34,6 +34,7 @@ This is a Rails 8.0 app that generates summaries of Hacker News articles and pro
 1. When you are writing TypeScript, follow modern web standards whenever possible. Always prefer writing TypeScript to untyped JavaScript.
 1. Use `yarn` for package management for the frontend.
 1. In general, when writing Ruby methods, try to keep them <= 10 lines of code (excluding comments, docstrings, etc).
+1. We use Tailwind 4. Stick to Tailwind 4 best practices when writing CSS. We use data-theme=dark for dark mode.
 
 ### Instruction summary
 

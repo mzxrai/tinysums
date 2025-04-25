@@ -55,12 +55,19 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
 }) => {
   // Use local state for individual control
   const [localExpanded, setLocalExpanded] = useState(false);
-  const { shouldExpandIndex, registerSummary } = useSummary();
+  const { shouldExpandIndex, registerSummary, globalExpanded } = useSummary();
 
   // Register this summary with the context on mount
   useEffect(() => {
     registerSummary(index);
   }, [index, registerSummary]);
+
+  // Reset local expanded state when global state changes to false (collapsed)
+  useEffect(() => {
+    if (!globalExpanded) {
+      setLocalExpanded(false);
+    }
+  }, [globalExpanded]);
 
   // Combine local and global state - expanded if either is true
   const isExpanded = localExpanded || shouldExpandIndex(index);
