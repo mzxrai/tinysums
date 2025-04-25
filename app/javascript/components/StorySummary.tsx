@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
+import { useSummary } from '../contexts/SummaryContext';
 
 /**
  * Create a custom sanitization schema that allows table elements
@@ -37,6 +38,8 @@ interface StorySummaryProps {
   };
   /** Whether the story has a URL (for Ask HN, Show HN posts) */
   hasUrl?: boolean;
+  /** Index of this summary in the list (for batched rendering) */
+  index: number;
 }
 
 /**
@@ -47,10 +50,20 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
   storySummary,
   commentsSummary,
   status,
-  hasUrl = true
+  hasUrl = true,
+  index
 }) => {
-  // Single state to track if the entire summary is expanded
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Use local state for individual control
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const { shouldExpandIndex, registerSummary } = useSummary();
+
+  // Register this summary with the context on mount
+  useEffect(() => {
+    registerSummary(index);
+  }, [index, registerSummary]);
+
+  // Combine local and global state - expanded if either is true
+  const isExpanded = localExpanded || shouldExpandIndex(index);
 
   /**
    * Extracts the first Markdown heading from the text
@@ -70,28 +83,6 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
     // If no heading found, return a short preview
     const firstLineMatch = text.match(/^(.{1,100})($|\n)/);
     return firstLineMatch ? `${firstLineMatch[1]}...` : `${text.substring(0, 100)}...`;
-  };
-
-  /**
-   * Renders markdown content with proper sanitization
-   * @param text - The markdown text to render
-   * @param isPreview - Whether this is a preview (first heading only) version
-   * @returns React component with rendered markdown
-   */
-  const renderMarkdown = (text?: string, isPreview: boolean = false) => {
-    if (!text) return null;
-
-    // For preview, use just the first heading
-    const contentToRender = isPreview ? extractFirstHeading(text) : text;
-
-    return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-      >
-        {contentToRender}
-      </ReactMarkdown>
-    );
   };
 
   /**
@@ -145,6 +136,15 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
   const hasContentSummary = isContentReady();
   const hasCommentsSummary = isCommentsReady();
 
+  // Simplify by just pre-rendering summary
+  const storyPreview = useMemo(() => {
+    return hasContentSummary ? extractFirstHeading(storySummary) : '';
+  }, [hasContentSummary, storySummary]);
+
+  const commentsPreview = useMemo(() => {
+    return hasCommentsSummary ? extractFirstHeading(commentsSummary) : '';
+  }, [hasCommentsSummary, commentsSummary]);
+
   // If no summaries are ready, just show a simple placeholder
   if (!hasContentSummary && !hasCommentsSummary) {
     return (
@@ -157,16 +157,19 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
   }
 
   // Only show the expand/collapse button if we have long enough content or comments summary
-  const needsExpansion =
-    (hasContentSummary && storySummary && storySummary.length > 100) ||
-    (hasCommentsSummary && commentsSummary && commentsSummary.length > 100);
+  const needsExpansion = hasUrl ?
+    // For stories with URLs: Show button if content is long enough
+    (hasContentSummary && storySummary)
+    :
+    // For stories without URLs (Ask HN/Show HN): Only show button if comments are long enough
+    (hasCommentsSummary && commentsSummary);
 
   // Return the summary component
   return (
     <div className="mt-2 text-xs leading-normal">
       {/* Content Summary Section - Only show for stories with URLs and if content summary exists */}
       {hasContentSummary && hasUrl && (
-        <div className="mb-3 border-l-4 border-l-orange-300 dark:border-l-orange-700/50 rounded-md bg-orange-50/30 dark:bg-zinc-800/70 pb-1 pt-3 px-6 mr-4">
+        <div className="mb-3 border-l-4 border-l-orange-300 dark:border-l-orange-700/50 rounded-md dark:bg-zinc-800/70 pb-3 pt-3 px-6 mr-4">
           <div className="flex items-center mb-3">
             <span className="font-medium bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 text-xs px-2 py-0.5 rounded-full">
               Article Summary
@@ -175,14 +178,28 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
 
           {/* Show either preview or full content based on expanded state */}
           <div className="text-black dark:text-zinc-200 markdown-content">
-            {isExpanded ? renderMarkdown(storySummary) : renderMarkdown(storySummary, true)}
+            {isExpanded ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+              >
+                {storySummary || ''}
+              </ReactMarkdown>
+            ) : (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+              >
+                {storyPreview || ''}
+              </ReactMarkdown>
+            )}
           </div>
         </div>
       )}
 
       {/* Comments Summary Section - Show for stories without URLs, stories with just comments, or when expanded */}
-      {(hasCommentsSummary || (!hasUrl && !hasContentSummary) || (isExpanded && hasUrl)) && (
-        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-2 pt-3 px-6 mr-4">
+      {((!hasUrl && hasCommentsSummary) || (isExpanded && hasCommentsSummary)) && (
+        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-4 pt-3 px-6 mr-4">
           <div className="flex items-center mb-3">
             <span className="font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
               Comments Summary
@@ -190,17 +207,36 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
           </div>
 
           <div className="text-black dark:text-zinc-200 markdown-content">
-            {hasCommentsSummary ? (
-              // Comments are ready, show preview or full content based on expanded state
-              !hasUrl && !isExpanded ?
-                renderMarkdown(commentsSummary, true) :
-                renderMarkdown(commentsSummary)
+            {!hasUrl && !isExpanded ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+              >
+                {commentsPreview || ''}
+              </ReactMarkdown>
             ) : (
-              // Comments are not ready, show placeholder (only shown when expanded or for stories without URLs)
-              <span className="italic text-[#828282] dark:text-zinc-400">
-                {getPlaceholderText('comments', status?.comments)}
-              </span>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+              >
+                {commentsSummary || ''}
+              </ReactMarkdown>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Comments Summary Placeholder - Show when expanded but comments not ready yet */}
+      {isExpanded && !hasCommentsSummary && hasContentSummary && status && (
+        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-3 pt-3 px-6 mr-4">
+          <div className="flex items-center mb-3">
+            <span className="font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
+              Comments Summary
+            </span>
+          </div>
+
+          <div className="text-black dark:text-zinc-200 italic">
+            {getPlaceholderText('comments', status.comments)}
           </div>
         </div>
       )}
@@ -209,7 +245,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
       {needsExpansion && (
         <div className="mt-3 text-left">
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={() => setLocalExpanded(!localExpanded)}
             className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm"
           >
             {isExpanded ? 'Show less' : 'Show more'}

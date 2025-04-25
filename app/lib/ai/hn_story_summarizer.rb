@@ -92,7 +92,7 @@ class Ai::HnStorySummarizer
   # @raise [RuntimeError] if extraction fails
   def extract_technical_content
     # Log the start of extraction with story ID and URL for tracking in logs
-    Rails.logger.info("STAGE 1: Extracting technical content from URL for story ##{story['id']}: #{story['url']}")
+    Rails.logger.info("Stage 1: Extracting technical content from URL for story ##{story['id']}: #{story['url']}")
 
     # Generate prompts for the extraction AI model
     system_prompt, user_prompt = create_extraction_prompts
@@ -108,7 +108,7 @@ class Ai::HnStorySummarizer
       end
 
       # Log successful extraction for monitoring
-      Rails.logger.info("STAGE 1 COMPLETE: Successfully extracted technical content")
+      Rails.logger.info("Stage 1 complete: Successfully extracted technical content")
 
       # Log citation count for analytics and debugging
       unless citations.empty?
@@ -133,7 +133,7 @@ class Ai::HnStorySummarizer
   # @raise [RuntimeError] if summarization fails
   def generate_dev_summary(content, citations = [])
     # Log that we're starting the dev summary generation process
-    Rails.logger.info("STAGE 2: Generating dev-focused summary for story ##{story['id']}")
+    Rails.logger.info("Stage 2: Generating dev-focused summary for story ##{story['id']}")
 
     # Create the system and user prompts for dev summarization
     system_prompt, user_prompt = create_dev_summary_prompts(content, citations)
@@ -150,7 +150,7 @@ class Ai::HnStorySummarizer
       end
 
       # Log that the summarization completed successfully
-      Rails.logger.info("STAGE 2 COMPLETE: Successfully generated dev-focused summary")
+      Rails.logger.info("Stage 2 complete: Successfully generated dev-focused summary")
 
       # Return the generated summary
       summary

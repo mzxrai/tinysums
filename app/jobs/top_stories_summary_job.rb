@@ -163,28 +163,59 @@ class TopStoriesSummaryJob
     end
   end
 
-  # Process items in batches with jitter between each item
-  # This method:
-  # 1. Divides items into small batches
-  # 2. Processes each item in a batch
-  # 3. Adds random delay between items to prevent overwhelming APIs
+  # Process items in batches with parallel execution
+  # This method implements a simple thread pool pattern for concurrent processing:
+  # 1. Divides items into small batches of BATCH_SIZE
+  # 2. Processes each batch using a thread pool for concurrent API calls
+  # 3. Limits the maximum number of concurrent threads to prevent overloading
+  # 4. Adds random delay between batches to prevent API rate limiting
   # @param items [Array] the items to process
-  # @yield [item] Block to execute for each item
+  # @yield [item] Block to execute for each item in its own thread
   # @return [void]
   def process_in_batches(items)
-    # Divide the items into smaller batches of BATCH_SIZE
-    items.each_slice(BATCH_SIZE).each do |batch|
-      # Process each item in the current batch
-      batch.each do |item|
-        # Process the item by yielding to the provided block
-        yield(item)
+    # Maximum number of concurrent threads to use
+    # This controls how many API calls we make in parallel
+    # Adjust based on API rate limits and server capacity
+    max_threads = 5
 
-        # Add jitter delay between items to prevent overloading
-        # Skip delay for the last item in the batch to avoid unnecessary waiting
-        unless item == batch.last
-          # Random delay within JITTER_RANGE to prevent predictable patterns
-          sleep(rand(JITTER_RANGE))
+    # Divide the items into smaller batches of BATCH_SIZE
+    # Each batch will be processed with concurrent threads
+    items.each_slice(BATCH_SIZE).each do |batch|
+      # Create an array to track threads for this batch
+      # This forms our thread pool for the current batch
+      threads = []
+
+      # Process each item in the current batch concurrently
+      batch.each do |item|
+        # Thread pool management: limit the number of concurrent threads
+        # If we reach max_threads, wait for the oldest thread to complete
+        # before starting a new one (FIFO processing)
+        if threads.size >= max_threads
+          # Wait for the oldest thread to finish
+          threads.first.join
+          # Remove the completed thread from our tracking array
+          threads.shift
         end
+
+        # Create a new thread for this item and add it to our pool
+        # Each thread makes its own API call independently
+        threads << Thread.new do
+          # Process the item by yielding to the provided block
+          # The block contains the actual summary generation logic
+          yield(item)
+        end
+      end
+
+      # Wait for all remaining threads in this batch to complete
+      # This ensures the entire batch is processed before moving to the next
+      threads.each(&:join)
+
+      # Add jitter delay between batches to prevent overwhelming APIs
+      # This spaces out "waves" of concurrent requests
+      # Skip the delay after the final batch to avoid unnecessary waiting
+      unless batch == items.each_slice(BATCH_SIZE).to_a.last
+        # Random delay within JITTER_RANGE to prevent predictable patterns
+        sleep(rand(JITTER_RANGE))
       end
     end
   end

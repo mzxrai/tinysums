@@ -1,80 +1,179 @@
 /* Markdown content styling */
 .markdown-content {
-  @apply text-sm leading-relaxed break-words;
+  @apply text-sm leading-relaxed tracking-normal break-words font-normal;
+  text-rendering: optimizeLegibility;
 }
 
 .markdown-content h1 {
-  @apply text-xl font-bold mb-2 mt-3 dark:text-zinc-200;
+  @apply text-xl font-bold mb-3 mt-4 dark:text-zinc-100 tracking-tight;
+  line-height: 1.3;
 }
 
 .markdown-content h2 {
-  @apply text-lg font-semibold mb-2 mt-3 dark:text-zinc-200;
+  @apply text-lg font-semibold mb-2.5 mt-4 dark:text-zinc-100 tracking-tight;
+  line-height: 1.35;
 }
 
 .markdown-content h3 {
-  @apply text-base font-medium mb-1 mt-2 dark:text-zinc-300;
+  @apply text-base font-medium mb-2 mt-3 dark:text-zinc-200 tracking-tight;
+  line-height: 1.4;
 }
 
 .markdown-content p {
-  @apply mb-2 break-words;
+  @apply mb-3 break-words dark:text-zinc-300;
+  line-height: 1.65;
 }
 
 .markdown-content a {
-  @apply text-blue-600 dark:text-blue-400 hover:underline;
+  @apply text-blue-600 dark:text-blue-400 hover:underline no-underline border-b border-blue-200 dark:border-blue-800 transition-colors;
 }
 
 .markdown-content ul {
-  @apply pl-5 mb-2 list-disc;
+  @apply pl-5 mb-3 list-disc space-y-1;
 }
 
 .markdown-content ol {
-  @apply pl-5 mb-2 list-decimal;
+  @apply pl-5 mb-3 list-decimal space-y-1;
 }
 
 .markdown-content li {
-  @apply mb-1;
+  @apply mb-1 dark:text-zinc-300;
+  line-height: 1.6;
+}
+
+.markdown-content li > ul,
+.markdown-content li > ol {
+  @apply mb-0 mt-1;
 }
 
 .markdown-content blockquote {
-  @apply pl-4 border-l-2 border-gray-300 dark:border-zinc-600 italic;
+  @apply pl-4 border-l-2 border-gray-300 dark:border-zinc-600 italic my-4 text-gray-700 dark:text-zinc-400;
 }
 
+/* Code blocks (multi-line) */
 .markdown-content pre {
-  @apply p-2 bg-gray-100 dark:bg-zinc-800 overflow-auto rounded my-2;
+  @apply p-3 overflow-auto rounded-md my-3 text-xs;
+  background-color: rgba(245, 247, 250, 0.8); /* very light gray with transparency */
+  border: 1px solid rgba(226, 232, 240, 1);
+  line-height: 1.5;
 }
 
+/* Dark mode pre blocks */
+.dark .markdown-content pre {
+  background-color: rgba(30, 41, 59, 0.7); /* dark with transparency */
+  border: 1px solid rgba(51, 65, 85, 0.8);
+}
+
+/* Inline code - default styling */
 .markdown-content code {
-  @apply bg-gray-100 dark:bg-zinc-800 px-1 py-0.5 rounded;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  padding: 0.15em 0.4em;
+  border-radius: 0.25rem;
+  color: #1e293b; /* dark gray */
+  background-color: rgba(241, 245, 249, 0.6); /* very subtle light gray with transparency */
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  font-size: 0.9em; /* Relative to parent size */
+  display: inline;
+  line-height: normal;
+  vertical-align: baseline;
+}
+
+/* Dark mode inline code */
+.dark .markdown-content code {
+  color: #e2e8f0; /* light gray for dark mode */
+  background-color: rgba(30, 41, 59, 0.5); /* subtle dark background */
+  border: 1px solid rgba(51, 65, 85, 0.7);
+}
+
+/* Special handling for code in headings */
+.markdown-content h1 code,
+.markdown-content h2 code,
+.markdown-content h3 code {
+  font-size: 0.85em; /* Slightly smaller than heading text */
+  vertical-align: middle;
+  position: relative;
+  top: -0.05em;
+  border-radius: 0.25rem;
+}
+
+/* Make code blocks different from inline code */
+.markdown-content pre code {
+  @apply bg-transparent border-0 p-0 text-xs;
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+  position: static;
+  top: 0;
+}
+
+.markdown-content p code {
+  @apply text-xs;
 }
 
 .markdown-content strong {
-  @apply font-bold;
+  @apply font-bold dark:text-zinc-200;
 }
 
 .markdown-content em {
-  @apply italic;
+  @apply italic dark:text-zinc-300;
 }
 
 .markdown-content hr {
-  @apply my-3 border-gray-300 dark:border-zinc-700;
+  @apply my-4 border-gray-200 dark:border-zinc-700;
 }
 
 .markdown-content img {
-  @apply max-w-full h-auto rounded my-2;
+  @apply max-w-full h-auto rounded-md my-4 mx-auto shadow-sm;
 }
 
 .markdown-content table {
-  @apply w-full mb-3 border-collapse text-left text-xs;
+  @apply w-full mb-4 table-fixed text-left text-xs my-3 overflow-hidden rounded-sm;
+  border-collapse: collapse;
+  border: 2px solid #d1d5db; /* gray-300 */
 }
 
 .markdown-content thead {
-  @apply bg-gray-50 dark:bg-zinc-800;
+  @apply bg-transparent dark:bg-zinc-800;
 }
 
 .markdown-content th {
-  @apply border border-gray-300 dark:border-zinc-700 px-2 py-1.5 font-semibold text-gray-700 dark:text-zinc-300;
+  @apply border-b-2 border-r border-gray-300 dark:border-zinc-700 px-3 py-2 font-bold text-gray-700 dark:text-zinc-300;
+  width: 1fr; /* Equal width distribution */
+}
+
+.markdown-content th:last-child {
+  @apply border-r-0;
 }
 
 .markdown-content td {
-  @apply border border-gray-300 dark:border-zinc-700 px-2 py-1.5;
+  @apply border-b border-r border-gray-300 dark:border-zinc-700 px-3 py-2 dark:text-zinc-400;
+}
+
+.markdown-content td:last-child {
+  @apply border-r-0;
+}
+
+.markdown-content tr:last-child td {
+  @apply border-b-0;
+}
+
+/* Add proper spacing between elements */
+.markdown-content > :first-child {
+  @apply mt-0;
+}
+
+.markdown-content > :last-child {
+  @apply mb-0;
+}
+
+/* Improve inline element spacing */
+.markdown-content h1 + p,
+.markdown-content h2 + p,
+.markdown-content h3 + p {
+  @apply mt-1;
+}
+
+/* Handle images and captions better */
+.markdown-content img + em {
+  @apply block -mt-2 text-center text-xs text-gray-500 dark:text-zinc-500;
 } 
