@@ -6,7 +6,6 @@ class Ai::SummaryGenerator
 
   # Define attribute readers for instance variables
   attr_reader :adapter, :story_id, :options, :thread_summarizer, :story_summarizer
-  attr_accessor :article_content
 
   # Initialize the summary generator with a specific adapter
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summary generation
@@ -31,19 +30,33 @@ class Ai::SummaryGenerator
       adapter,
       story_id
     )
-
-    # Initialize the article content instance var
-    @article_content = nil
   end
 
   # Generate both content and comment summaries for a story
-  # @return [Hash] hash with :content_summary and :comment_summary keys
-  def generate_summaries
-    # Return both summaries in a hash
-    {
+  # @param cache [Boolean] whether to cache the summary result
+  # @return [Hash] hash with :story_summary and :comments_summary keys
+  def generate_summaries(cache: false)
+    # Check if we should use cached result
+    cached_result = cache ? Rails.cache.read(cache_key) : nil
+
+    # If we have a valid cached result, return it
+    if cached_result.present?
+      return cached_result
+    end
+
+    # Generate new summaries
+    result = {
       story_summary: generate_story_summary,
       comments_summary: generate_comments_summary
     }
+
+    # Store in cache if requested
+    if cache
+      Rails.cache.write(cache_key, result, expires_in: 24.hours)
+    end
+
+    # Return the result
+    result
   end
 
   private
@@ -66,5 +79,12 @@ class Ai::SummaryGenerator
 
     # Use our specialized thread summarizer for HN comments
     thread_summarizer.generate_thread_summary
+  end
+
+  # Generate a cache key for the current story and adapter
+  # @return [String] the formatted cache key
+  def cache_key
+    # Format: summary_generator:{story_id}:{adapter_class_name}
+    "summary_generator:#{story_id}:#{adapter.class.name}"
   end
 end

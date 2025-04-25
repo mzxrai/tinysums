@@ -44,12 +44,8 @@ export interface HackerNewsStory {
   type?: string;
   /** Status of the summary generation process */
   status?: StoryStatus;
-  /** AI-generated summary of the story content */
-  contentSummary?: string;
-  /** Metadata about the content summary */
-  contentSummaryMeta?: SummaryMeta;
-  /** AI-generated summary of the story's comment section */
-  commentsSummary?: string;
-  /** Metadata about the comments summary */
-  commentsSummaryMeta?: SummaryMeta;
+  /** AI-generated summary of the story content (from API) */
+  story_summary?: string;
+  /** AI-generated summary of the story's comment section (from API) */
+  comments_summary?: string;
 } 

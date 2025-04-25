@@ -47,7 +47,11 @@ class Ai::HnStorySummarizer
 
   # Generate a summary of the HN story's article content
   # @return [String] the generated summary
+  # @return [nil] if the story doesn't have a URL to summarize
   def generate_story_summary
+    # Return nil if this is a text post without a URL
+    return nil unless story["url"]
+
     # Check if we have a cached summary and return it if available
     cached = get_cached_summary_if_enabled
 
@@ -73,16 +77,18 @@ class Ai::HnStorySummarizer
 
   # Get the content hash for the current story
   # This is memoized so it's only calculated once per story
-  # @return [String] the SHA-256 hash for the story URL
+  # @return [String] the SHA-256 hash for the story ID
   def content_hash
-    # Calculate and store the hash of the story URL
-    @content_hash ||= Digest::SHA256.hexdigest(story["url"])
+    # Simply use the story ID as the basis for the hash
+    # Every story has an ID so this is reliable
+    @content_hash ||= Digest::SHA256.hexdigest("story:#{story['id']}")
   end
 
   # Fetch story details and validate it has a URL
   # @param story_id [Integer] the HN story ID
   # @return [Hash] the validated story details
-  # @raise [RuntimeError] if story not found or has no URL
+  # @return [nil] if the story doesn't have a URL (e.g., Ask HN or Show HN posts)
+  # @raise [RuntimeError] if story not found
   def fetch_and_validate_story(story_id)
     # Fetch the story details from the HN API
     story = fetch_story_details(story_id)
@@ -93,8 +99,11 @@ class Ai::HnStorySummarizer
     # Raise an error if no story was found with this ID
     raise "Story not found" unless story
 
-    # Raise an error if the story doesn't have a URL to summarize
-    raise "No URL available for this story" unless story["url"]
+    # For Ask HN or Show HN posts that don't have a URL, return the story but log a message
+    unless story["url"]
+      Rails.logger.info("Story ##{story_id} is a text post without URL, will skip content summary")
+      return story
+    end
 
     # Return the validated story object
     story
@@ -106,7 +115,7 @@ class Ai::HnStorySummarizer
     # Check if caching is enabled and if we have a cached summary for this hash
     if options[:cache_summaries] && (cached_summary = get_cached_summary)
       # Log that we're using a cached summary instead of generating a new one
-      Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']}")
+      Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']} with adapter #{summary_adapter.class.name}")
 
       # Return the cached summary we found
       return cached_summary

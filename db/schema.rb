@@ -10,10 +10,42 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_02_13_000003) do
+ActiveRecord::Schema[8.0].define(version: 2025_04_25_161605) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
+
+  create_table "comments_summaries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "story_id", null: false
+    t.text "content"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["story_id"], name: "index_comments_summaries_on_story_id"
+  end
+
+  create_table "stories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.integer "hn_id", null: false
+    t.string "title"
+    t.string "url"
+    t.string "by"
+    t.integer "score"
+    t.integer "time"
+    t.integer "descendants", default: 0
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "rank"
+    t.index ["active"], name: "index_stories_on_active"
+    t.index ["hn_id"], name: "index_stories_on_hn_id", unique: true
+  end
+
+  create_table "story_summaries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "story_id", null: false
+    t.text "content"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["story_id"], name: "index_story_summaries_on_story_id"
+  end
 
   create_table "user_authentications", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "user_id", null: false
@@ -35,5 +67,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_13_000003) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "comments_summaries", "stories"
+  add_foreign_key "story_summaries", "stories"
   add_foreign_key "user_authentications", "users"
 end

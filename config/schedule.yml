@@ -6,29 +6,8 @@
 #   class: "ClassName"
 #   args: [argument1, argument2]
 
-# Summarize top HN stories hourly (default adapter)
-hourly_hn_stories_summarization:
-  cron: "0 * * * *" # Every hour at minute 0
-  class: "HnTopStoriesJob"
-  args: [30, false] # 30 stories, don't force refresh, default adapter
-
-# Different adapters can be scheduled for different times to compare results
-# Uncomment or modify as needed
-
-# Hourly summarization using Google adapter
-# hourly_google_summarization:
-#   cron: "15 * * * *" # Every hour at minute 15
-#   class: "HnTopStoriesJob"
-#   args: [30, false, "google"]
-
-# Hourly summarization using OpenAI adapter
-# hourly_openai_summarization:
-#   cron: "30 * * * *" # Every hour at minute 30
-#   class: "HnTopStoriesJob"
-#   args: [30, false, "openai"]
-
-# Hourly summarization using Anthropic adapter
-# hourly_anthropic_summarization:
-#   cron: "45 * * * *" # Every hour at minute 45
-#   class: "HnTopStoriesJob"
-#   args: [30, false, "anthropic"]
+# Hourly job to fetch and summarize top Hacker News stories
+top_stories_summary_job:
+  cron: "0 * * * *" # Run at the top of every hour
+  class: "TopStoriesSummaryJob"
+  description: "Fetches top HN stories and generates AI summaries for database storage"

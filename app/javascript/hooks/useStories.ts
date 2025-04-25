@@ -4,7 +4,10 @@ import { HackerNewsStory } from '../types/HackerNews';
 
 /**
  * @description Custom hook for fetching Hacker News stories
- * @returns Query object containing stories data, loading state, error state, etc.
+ * @returns Query object containing stories data with summaries when available, 
+ *          loading state, error state, etc.
+ * @remarks This hook fetches data from the /api/stories endpoint which includes
+ *          story_summary and comments_summary properties when available
  */
 export const useStories = () => {
   return useQuery<HackerNewsStory[], Error>({

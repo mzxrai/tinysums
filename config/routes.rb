@@ -15,7 +15,6 @@ Rails.application.routes.draw do
   # API routes
   namespace :api do
     resources :stories, only: [ :index ]
-    # resources :summaries, only: [ :index, :show ]
   end
 
   # Mount Sidekiq web UI
