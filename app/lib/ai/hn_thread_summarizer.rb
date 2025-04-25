@@ -89,13 +89,15 @@ class Ai::HnThreadSummarizer
   # @return [Hash, nil] the story with its comment tree or nil if not found
   def fetch_story_with_comments(story_id)
     # Log the start of the API call for monitoring
-    Rails.logger.info("HN API CALL: Fetching story ##{story_id} with comments")
+    Rails.logger.info("HN API call: Fetching story ##{story_id} with comments")
 
     # Use the HN client to fetch the story and all comments
     story = hn_client.get_story_with_comments(story_id)
 
     # Log the completion of the API call with comment count
-    log_fetch_completion(story_id, story)
+    Rails.logger.info(
+      "HN API call complete: Fetched story ##{story_id} with #{story ? story["descendants"] || 0 : 0} comments"
+    )
 
     # Return the story with its full comment tree
     story
@@ -122,9 +124,6 @@ class Ai::HnThreadSummarizer
     # Skip if comment has no author (deleted comment)
     return if comment["by"].nil?
 
-    # Log the start of user information fetch
-    log_user_fetch_start(comment["by"])
-
     # Retrieve user information from the HN API
     user = hn_client.get_user(comment["by"])
 
@@ -133,9 +132,6 @@ class Ai::HnThreadSummarizer
 
     # Add the karma value to the comment data
     comment["author_karma"] = user_karma
-
-    # Log the completion of the user fetch
-    log_user_fetch_complete(comment["by"], user_karma)
   end
 
   # Process replies recursively to add karma
@@ -541,14 +537,14 @@ class Ai::HnThreadSummarizer
     # Create the system and user prompts for the AI
     system_prompt, user_prompt = create_summary_prompt(content)
 
-    # Log that summary generation is starting
-    log_summary_generation_start
+    # Log message indicating summary generation has begun
+    Rails.logger.info("Generating summary for story ##{story['id']}")
 
     # Generate the summary using the AI adapter
     summary = adapter.complete(system_prompt, user_prompt)
 
     # Log that summary generation is complete
-    log_summary_generation_end(summary)
+    Rails.logger.info("Generated summary for story ##{story['id']}:\n#{summary}")
 
     # Return the generated summary
     summary
@@ -641,54 +637,7 @@ class Ai::HnThreadSummarizer
       #{instructions}
     USER_PROMPT
 
-    # Return both prompts in an array
+    # Return the system prompt and user prompt
     [ system_prompt, user_prompt ]
-  end
-
-  #
-  # Logging methods
-  #
-
-  # Log that summary generation is starting
-  def log_summary_generation_start
-    # Log message indicating summary generation has begun
-    Rails.logger.info("Generating summary for story ##{story['id']}")
-  end
-
-  # Log that summary generation is complete
-  # @param summary [String] the generated summary
-  def log_summary_generation_end(summary)
-    # Log message with the completed summary text
-    Rails.logger.info("GENERATED SUMMARY for story ##{story['id']}:\n#{summary}")
-  end
-
-  # Log start of user fetch operation
-  # @param username [String] the username being fetched
-  def log_user_fetch_start(username)
-    # Log the API call start with the username
-    Rails.logger.info("HN API CALL: Fetching user #{username} for karma lookup")
-  end
-
-  # Log completion of user fetch operation
-  # @param username [String] the username that was fetched
-  # @param karma [Integer] the user's karma
-  def log_user_fetch_complete(username, karma)
-    # Log the API call completion with username and karma
-    Rails.logger.info(
-      "HN API CALL COMPLETE: Fetched user #{username} with karma #{karma}"
-    )
-  end
-
-  # Log completion of fetch operation
-  # @param story_id [Integer] the HN story ID
-  # @param story [Hash] the fetched story
-  def log_fetch_completion(story_id, story)
-    # Calculate the number of comments (0 if story not found)
-    comment_count = story ? story["descendants"] || 0 : 0
-
-    # Log the API call completion with the comment count
-    Rails.logger.info(
-      "HN API CALL COMPLETE: Fetched story ##{story_id} with #{comment_count} comments"
-    )
   end
 end

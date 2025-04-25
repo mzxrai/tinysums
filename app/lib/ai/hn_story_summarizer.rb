@@ -3,9 +3,6 @@
 class Ai::HnStorySummarizer
   # Default options for story summarization
   DEFAULT_OPTIONS = {
-    # Enable caching of summaries
-    cache_summaries: true,
-
     # Maximum story text length for summarization
     max_text_length: 8000,
 
@@ -52,37 +49,17 @@ class Ai::HnStorySummarizer
     # Return nil if this is a text post without a URL
     return nil unless story["url"]
 
-    # Check if we have a cached summary and return it if available
-    cached = get_cached_summary_if_enabled
-
-    # Return the cached summary if we found one
-    return cached if cached
-
     # STAGE 1: Extract detailed content from the article URL
     content, citations = extract_technical_content
 
-    puts "CITATIONS: #{citations}"
-
     # STAGE 2: Generate dev-focused summary from the technical content
     final_summary = generate_dev_summary(content, citations)
-
-    # Save the generated summary to our cache if caching is enabled
-    cache_summary_if_enabled(final_summary)
 
     # Return the newly generated summary
     final_summary
   end
 
   private
-
-  # Get the content hash for the current story
-  # This is memoized so it's only calculated once per story
-  # @return [String] the SHA-256 hash for the story ID
-  def content_hash
-    # Simply use the story ID as the basis for the hash
-    # Every story has an ID so this is reliable
-    @content_hash ||= Digest::SHA256.hexdigest("story:#{story['id']}")
-  end
 
   # Fetch story details and validate it has a URL
   # @param story_id [Integer] the HN story ID
@@ -109,22 +86,6 @@ class Ai::HnStorySummarizer
     story
   end
 
-  # Get cached summary if caching is enabled
-  # @return [String, nil] the cached summary or nil if not found/disabled
-  def get_cached_summary_if_enabled
-    # Check if caching is enabled and if we have a cached summary for this hash
-    if options[:cache_summaries] && (cached_summary = get_cached_summary)
-      # Log that we're using a cached summary instead of generating a new one
-      Rails.logger.info("Using CACHED SUMMARY for story ##{story['id']} with adapter #{summary_adapter.class.name}")
-
-      # Return the cached summary we found
-      return cached_summary
-    end
-
-    # Return nil if caching is disabled or no cached summary was found
-    nil
-  end
-
   # STAGE 1: Extract technical content from the article URL
   # @return [Array] [content, citations] where content is the extracted technical content and citations is an array of
   # citation URLs
@@ -135,10 +96,6 @@ class Ai::HnStorySummarizer
 
     # Generate prompts for the extraction AI model
     system_prompt, user_prompt = create_extraction_prompts
-
-    # Debug output to help troubleshoot prompt issues
-    puts "SYSTEM PROMPT: #{system_prompt}"
-    puts "USER PROMPT: #{user_prompt}"
 
     begin
       # Call the AI adapter (e.g., Perplexity API) to process the URL and extract relevant content
@@ -204,27 +161,6 @@ class Ai::HnStorySummarizer
       # Re-raise the error with a more descriptive message
       raise "Failed to generate dev summary: #{e.message}"
     end
-  end
-
-  # Check if a summary exists in cache for given content
-  # @return [String, nil] the cached summary or nil if not found
-  def get_cached_summary
-    # Look up the summary in Rails cache
-    Rails.cache.read(cache_key)
-  end
-
-  # Store a summary in the cache
-  # @param summary [String] the summary to cache
-  def cache_summary_if_enabled(summary)
-    # Store the summary in Rails cache if caching is enabled
-    Rails.cache.write(cache_key, summary) if options[:cache_summaries]
-  end
-
-  # Generate a cache key for the current story
-  # @return [String] the formatted cache key
-  def cache_key
-    # Format: hnsum:story:summary:{hash}
-    "hnsum:story:summary:#{content_hash}".freeze
   end
 
   # Fetch a story's details
@@ -363,8 +299,6 @@ class Ai::HnStorySummarizer
 
       --------------- END INSTRUCTIONS FOR SUMMARY GENERATION ---------------
     USER
-
-    puts "USER PROMPT: #{user_prompt}"
 
     # Return an array containing both the system prompt and user prompt
     [ system_prompt, user_prompt ]
