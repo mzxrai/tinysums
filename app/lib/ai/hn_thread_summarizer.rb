@@ -609,7 +609,15 @@ class Ai::HnThreadSummarizer
       the summary is *for* them, but not written *to* them. Developers will be presented with many of these summaries on
       the same webpage side by side, so speaking to them directly would be redundant and annoying.
 
-      *Remember*: Return only the summary; do not include any preface or post-text.
+      When generating Markdown, if you choose to include blockquotes, ensure you first start a **blank new line** and
+      then add a ">" character followed by a space then the verbatimquote.
+
+      Use proper, valid Markdown syntax for all Markdown elements you include like tables, links, lists, headings, etc.
+
+      ---
+
+      *Remember*: Return only the Markdown summary starting with the first heading; do not include any preface or
+      post-text.
     INSTRUCTIONS
 
     # Prepare the full system prompt

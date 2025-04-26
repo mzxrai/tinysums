@@ -6,6 +6,8 @@ import { Header } from './components/layout/Header';
 // Import page components
 import { HomePage } from './pages/HomePage';
 import { CompaniesPage } from './pages/companies/CompaniesPage';
+// Import the StoryPage for permalink functionality
+import { StoryPage } from './pages/StoryPage';
 // Import the ClickCounter for now, might be moved later
 import { ClickCounter } from './components/ClickCounter';
 // Import TanStack Query components
@@ -64,6 +66,8 @@ const App: React.FC = () => {
           <Routes>
             {/* Home route */}
             <Route path="/" element={<HomePage />} />
+            {/* Story permalink route - for direct linking to summaries */}
+            <Route path="/story/:id" element={<StoryPage />} />
             {/* Companies route */}
             <Route path="/companies" element={<CompaniesPage />} />
             {/* Legacy route for backwards compatibility */}

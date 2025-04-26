@@ -2,6 +2,7 @@ import React from 'react';
 import { HackerNewsStory } from '../types/HackerNews';
 import { StorySummary } from './StorySummary';
 import { SummaryProvider, useSummary } from '../contexts/SummaryContext';
+import { extractHostname } from '../utils/urlUtils';
 
 /**
  * Props for the StoryList component
@@ -12,47 +13,40 @@ interface StoryListProps {
 }
 
 /**
- * Extracts the hostname from a URL string
- * @param url - The URL to extract the hostname from
- * @returns The extracted hostname or null if invalid
- * @remarks Returns null specifically for news.ycombinator.com to avoid displaying it,
- *          matching the behavior of Hacker News itself.
- */
-const extractHostname = (url: string): string | null => {
-  // Start of try block to handle potential URL parsing errors
-  try {
-    // Create a new URL object from the input string
-    // This can throw an error if the URL string is malformed
-    const parsedUrl = new URL(url);
-    // Get the hostname property from the URL object
-    const hostname = parsedUrl.hostname;
-    // Check if the hostname is the Hacker News domain itself
-    // Return null if it is, otherwise return the extracted hostname
-    return hostname === 'news.ycombinator.com' ? null : hostname;
-    // Catch any errors during URL parsing (e.g., TypeError for invalid URL)
-  } catch (e) {
-    // Log the error for debugging purposes (optional)
-    // console.error("Invalid URL for hostname extraction:", url, e);
-    // Return null if the URL is invalid or parsing fails, preventing component errors
-    return null;
-  }
-  // End of function
-};
-
-/**
  * Button component to expand or collapse all summaries 
  * Memoized to prevent unnecessary re-renders
  */
 const ExpandCollapseAllButton: React.FC = React.memo(() => {
   // Get the summary context to control global expansion state
-  const { globalExpanded, toggleAll } = useSummary();
+  // Using the refactored context hook
+  const { expandAll, collapseAll, isAllExpanded } = useSummary();
 
+  // Determine the current collective state
+  const allCurrentlyExpanded = isAllExpanded();
+
+  // Define the click handler
+  const handleToggleClick = () => {
+    // If all are currently expanded, call collapseAll
+    if (allCurrentlyExpanded) {
+      // Collapse all summaries
+      collapseAll();
+    } else {
+      // Otherwise, expand all summaries
+      expandAll();
+    }
+  };
+
+  // Return the button element
   return (
+    // Button element itself
     <button
-      onClick={toggleAll}
-      className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm ml-2"
+      // Attach the click handler
+      onClick={handleToggleClick}
+      // Dynamic styling based on theme and interaction
+      className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm"
     >
-      {globalExpanded ? 'Collapse All' : 'Expand All'}
+      {/* Dynamically set button text based on the current collective state */}
+      {allCurrentlyExpanded ? 'Collapse All' : 'Expand All'}
     </button>
   );
 });
@@ -134,7 +128,7 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
                     {/* Light mode text: HN gray (#828282) */}
                     {/* Dark mode text: Lighter zinc (zinc-500) */}
                     {/* Adjusted width, padding, font weight, and alignment for HN style */}
-                    <span className="text-[#828282] dark:text-zinc-500 font-normal w-8 sm:w-10 text-right pr-1.5 sm:pr-2 pt-0.5 text-xs">
+                    <span className="text-[#828282] dark:text-zinc-500 font-normal w-5 sm:w-6 text-right pr-1 sm:pr-1.5 pt-0.5 text-xs">
                       {/* Display the rank (index + 1) followed by a period */}
                       {index + 1}.
                     </span>
@@ -268,13 +262,14 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
                   {/* AI Summary Section */}
                   {/* Display the StorySummary component if either summary is available */}
                   {(story.story_summary || story.comments_summary || story.status) && (
-                    <div className="ml-8 sm:ml-10">
+                    <div className="ml-5 sm:ml-6">
                       <StorySummary
                         storySummary={story.story_summary}
                         commentsSummary={story.comments_summary}
                         status={story.status}
                         hasUrl={!!story.url}
                         index={index}
+                        hnId={story.id}
                       />
                     </div>
                   )}

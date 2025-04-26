@@ -35,6 +35,8 @@ This is a Rails 8.0 app that generates summaries of Hacker News articles and pro
 1. Use `yarn` for package management for the frontend.
 1. In general, when writing Ruby methods, try to keep them <= 10 lines of code (excluding comments, docstrings, etc).
 1. We use Tailwind 4. Stick to Tailwind 4 best practices when writing CSS. We use data-theme=dark for dark mode.
+1. When creating React components, write simple, small, focused components whenever possible. Giant components that try to do everything are a nightmare to work with, and should be avoided.
+1. You do not need to rebuild the CSS for the frontend after making a change.
 
 ### Instruction summary
 

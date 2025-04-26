@@ -241,7 +241,7 @@ class Ai::HnStorySummarizer
       In essence, your summary should be just as informative as the summary you're provided with, but more readable.
 
       If you find any citations in the technical overview, use them to create a list of numbered references at the end
-      of your summary. Format the citations as an ordered Markdown list.
+      of your summary. Format the citations as proper **Markdown links** in an ordered Markdown list.
 
       ## Summary format
 
@@ -256,6 +256,11 @@ class Ai::HnStorySummarizer
 
       If the overview we provide you includes code snippets or code samples, and you choose to include them in your
       summary, reproduce them **verbatim**. Do not modify them in any way.
+
+      When generating Markdown, if you choose to include blockquotes, ensure you first start a **blank new line** and
+      then add a ">" character followed by a space then the quote.
+
+      Use proper, valid Markdown syntax for all Markdown elements you include like tables, links, lists, headings, etc.
 
       ---
 

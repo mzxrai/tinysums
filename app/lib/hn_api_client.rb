@@ -8,7 +8,7 @@ class HnApiClient
   # User information changes less frequently, so we cache it longer
   USER_CACHE_EXPIRATION = 10.days
   # Items (stories, comments) may be edited, but older comments rarely change
-  ITEM_CACHE_EXPIRATION = 2.weeks
+  ITEM_CACHE_EXPIRATION = 5.minutes
 
   # Define attribute readers
   attr_reader :connection
