@@ -145,9 +145,9 @@ export const SummaryProvider: React.FC<SummaryProviderProps> = ({ children }) =>
    * @returns {boolean} True if all registered summaries are expanded, false otherwise.
    */
   const isAllExpanded = useCallback((): boolean => {
-    // If there are no registered summaries, consider them "all expanded"
+    // If there are no registered summaries, consider them collapsed (not expanded)
     if (registeredIndices.length === 0) {
-      return true;
+      return false;
     }
     // Check if *every* registered index has a true value in expansionState
     return registeredIndices.every(index => expansionState[index] === true);

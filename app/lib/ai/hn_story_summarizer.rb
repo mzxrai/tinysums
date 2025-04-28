@@ -14,7 +14,10 @@ class Ai::HnStorySummarizer
     include_context: true,
 
     # Custom summary instructions (can be nil to use defaults)
-    custom_instructions: nil
+    custom_instructions: nil,
+
+    # Maximum number of extraction attempts (initial + retries)
+    max_attempts: 3
   }.freeze
 
   # Define attribute readers/accessors for instance variables
@@ -89,40 +92,104 @@ class Ai::HnStorySummarizer
   # STAGE 1: Extract technical content from the article URL
   # @return [Array] [content, citations] where content is the extracted technical content and citations is an array of
   # citation URLs
-  # @raise [RuntimeError] if extraction fails
   def extract_technical_content
     # Log the start of extraction with story ID and URL for tracking in logs
     Rails.logger.info("Stage 1: Extracting technical content from URL for story ##{story['id']}: #{story['url']}")
 
-    # Generate prompts for the extraction AI model
+    # Get the maximum number of attempts from options
+    max_attempts = options[:max_attempts]
+
+    # Try to extract content with retries if needed
+    content, citations = attempt_extraction_with_retries(max_attempts)
+
+    # Return the content and citations, even if extraction failed
+    [ content, citations ]
+  end
+
+  # Helper method to attempt content extraction with retries
+  # @param max_attempts [Integer] maximum number of attempts to try
+  # @return [Array] [content, citations] from the extraction
+  def attempt_extraction_with_retries(max_attempts)
+    # Initialize attempt counter to first attempt
+    attempt_count = 1
+
+    # Loop until we get successful content or exhaust retry attempts
+    while attempt_count <= max_attempts
+      # Log current attempt if not the first attempt
+      log_extraction_attempt(attempt_count, max_attempts) if attempt_count > 1
+
+      # Try a single extraction using helper method
+      content, citations = try_single_extraction
+
+      # Check if extraction failed due to URL access issue
+      if content_has_access_failure?(content)
+        # Log this specific failure type for monitoring
+        Rails.logger.error("Content extraction attempt #{attempt_count}/#{max_attempts} failed: Model unable to access URL")
+
+        # Increment attempt counter for next try
+        attempt_count += 1
+
+        # Try again if we haven't reached maximum attempts
+        next if attempt_count <= max_attempts
+      end
+
+      # Return result (either success or final failed attempt)
+      return [ content, citations ]
+    end
+  end
+
+  # Helper method to check if content has access failure message
+  # @param content [String] the content to check
+  # @return [Boolean] true if content indicates URL access failure
+  def content_has_access_failure?(content)
+    # Check if content exists and contains the "unable to access" phrase
+    content && content.match?(/unable to access/i)
+  end
+
+  # Helper method to log extraction attempt
+  # @param attempt_count [Integer] current attempt number
+  # @param max_attempts [Integer] maximum number of attempts
+  def log_extraction_attempt(attempt_count, max_attempts)
+    # Log the current retry attempt number and URL being accessed
+    Rails.logger.info("Attempt #{attempt_count}/#{max_attempts} for extracting content from URL: #{story['url']}")
+  end
+
+  # Helper method to try a single extraction
+  # @return [Array] [content, citations] from the extraction
+  def try_single_extraction
+    # Generate system and user prompts for the extraction AI model
     system_prompt, user_prompt = create_extraction_prompts
 
+    # Try to extract content, handling potential errors
     begin
-      # Call the AI adapter (e.g., Perplexity API) to process the URL and extract relevant content
-      # Response is an array where first element is content, second is citations
+      # Call the AI adapter to process the URL and extract content
       content, citations = extraction_adapter.complete(system_prompt, user_prompt)
 
-      # Validate that we have actual content to work with
-      if !content || content.strip.empty?
-        raise "Empty content extracted for URL: #{story['url']}"
-      end
+      # Log success information if we have valid content
+      log_extraction_success(content, citations) unless content.nil? || content.strip.empty?
 
-      # Log successful extraction for monitoring
-      Rails.logger.info("Stage 1 complete: Successfully extracted technical content")
-
-      # Log citation count for analytics and debugging
-      unless citations.empty?
-        Rails.logger.info("Found #{citations.length} citations in extracted content")
-      end
-
-      # Return both the extracted content and any citations as an array
+      # Return the extracted content and citations
       [ content, citations ]
     rescue StandardError => e
       # Log the specific error details for debugging
       Rails.logger.error("Content extraction failed: #{e.message}")
 
-      # Re-raise with a more user-friendly message that maintains the original error context
-      raise "Failed to extract article content: #{e.message}"
+      # Return error message as content with empty citations
+      [ "Failed to extract article content: #{e.message}", [] ]
+    end
+  end
+
+  # Helper method to log extraction success information
+  # @param content [String] the extracted content
+  # @param citations [Array] array of citation URLs
+  def log_extraction_success(content, citations)
+    # Log successful extraction for monitoring
+    Rails.logger.info("Stage 1 complete: Successfully extracted technical content")
+
+    # Log citation count for analytics and debugging
+    unless citations.empty?
+      # Log the number of citations found in the content
+      Rails.logger.info("Found #{citations.length} citations in extracted content")
     end
   end
 
@@ -165,7 +232,7 @@ class Ai::HnStorySummarizer
 
   # Fetch a story's details
   # @param story_id [Integer] the HN story ID to fetch
-  # @return [Hash, nil] the story details or nil if not found
+  # @return [Hash, nil] the story details as a hash or nil if not found
   def fetch_story_details(story_id)
     # Use the HN API client to fetch basic story info
     hn_client.get_item(story_id)
@@ -212,6 +279,9 @@ class Ai::HnStorySummarizer
 
       If the article includes code snippets or code samples, and you choose to include them in your rundown, reproduce
       them **verbatim**. Do not modify them in any way.
+
+      If you're unable to access the provided URL, simply return the string "unable to access" verbatim somewhere in
+      your response. This is important, as it lets us detect whether the retrieval has failed.
 
       Format the overview in valid Markdown. Don't include any introductory text like "Here's an overview...";
       instead, return the overview by itself.

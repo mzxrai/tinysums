@@ -307,7 +307,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
                 // Action to perform on click
                 onClick={() => copyPermalink('article')}
                 // Styling for the button
-                className="text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors duration-150 focus:outline-none text-xs flex items-center"
+                className="text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300 hover:cursor-pointer transition-colors duration-150 focus:outline-none text-xs flex items-center"
                 // Tooltip text
                 title="Copy permalink to article summary"
                 // Accessibility label

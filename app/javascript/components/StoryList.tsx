@@ -56,31 +56,6 @@ const ExpandCollapseAllButton: React.FC = React.memo(() => {
  * supporting both light (Hacker News style) and dark themes via Tailwind's dark: variant.
  */
 export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
-  // Add a log to see what props are actually received
-  console.log('StoryList received stories:', stories);
-
-  // Format the last updated time
-  const getLastUpdatedTime = () => {
-    if (!stories.length) return "N/A";
-
-    // Find the most recent update time across all stories
-    const latestTime = Math.max(
-      ...stories
-        .filter(story => story.status?.updatedAt)
-        .map(story => story.status?.updatedAt || 0)
-    );
-
-    // Format the timestamp
-    return latestTime > 0
-      ? new Date(latestTime * 1000).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-      : "N/A";
-  };
-
   // Check if stories is actually an array before trying to map
   if (!Array.isArray(stories)) {
     // Log an error if stories is not an array
@@ -100,7 +75,8 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
               <ExpandCollapseAllButton />
             </div>
             <div className="text-xs text-gray-500 dark:text-zinc-400 whitespace-nowrap">
-              Summaries by <span className="font-bold">Gemini 2.5 Pro</span> | Last Updated {getLastUpdatedTime()}
+              {/* Fixed-width container to prevent layout shift when time updates */}
+              Summaries by <span className="font-bold">Gemini 2.5 Pro</span>
             </div>
           </div>
 
