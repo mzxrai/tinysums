@@ -20,7 +20,7 @@ class Ai::HnStorySummarizer
     custom_instructions: nil,
 
     # Maximum number of extraction attempts (initial + retries)
-    max_attempts: 3
+    max_attempts: 5
   }.freeze
 
   # JSON schema for Gemini classification response.
@@ -175,7 +175,7 @@ class Ai::HnStorySummarizer
         attempt_count += 1
 
         # Sleep for a random amount of time between attempts
-        sleep(rand(1..3))
+        sleep(rand(1..5))
 
         # Continue to the next iteration if attempts remain
         next
