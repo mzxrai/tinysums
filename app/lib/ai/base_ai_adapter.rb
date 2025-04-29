@@ -58,6 +58,24 @@ class Ai::BaseAiAdapter
     (max_input_tokens / TOKEN_PER_CHAR_RATIO).floor
   end
 
+  # Executes a completion request requiring structured JSON output conforming to a schema.
+  # Specific adapters must implement this to handle provider-specific mechanisms
+  # for enforcing structured output (e.g., Gemini's response_schema, OpenAI's JSON mode).
+  #
+  # @param system_prompt [String] The system prompt for the AI.
+  # @param user_prompt [String] The user prompt for the AI.
+  # @param json_schema [Hash] The JSON schema the response must conform to.
+  # @return [String] The raw JSON string response from the AI.
+  # @raise [NotImplementedError] If the concrete adapter does not support this feature.
+  # @raise [StandardError] If the API call itself fails.
+  def complete_with_json_schema(system_prompt, user_prompt, json_schema)
+    # Raise error by default, forcing subclasses to implement.
+    raise NotImplementedError, "#{self.class.name} does not implement structured JSON completion"
+
+    # Ensure meticulous documentation, including inline comments.
+    # Adhere to the <= 10 LOC guideline for the implementing methods.
+  end
+
   # Generic completion method - primary public interface for adapters.
   # Executes the prompt using the configured model and options.
   # @param system_prompt [String] system instructions

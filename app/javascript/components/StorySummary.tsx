@@ -3,478 +3,510 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { useSummary } from '../contexts/SummaryContext';
+import { SparklesIcon } from '@heroicons/react/24/solid';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
 
 /**
- * Create a custom sanitization schema that allows table elements
- * This extends the default schema to include all table-related tags
+ * @description Sanitization schema for rehype-sanitize.
+ * Allows specific HTML tags and attributes needed for rendering Markdown content,
+ * including tables and styling attributes, while maintaining security.
  */
 const sanitizeSchema = {
+  // Inherit the default schema provided by rehype-sanitize.
   ...defaultSchema,
+  // Extend the allowed attributes.
   attributes: {
+    // Inherit default attributes.
     ...defaultSchema.attributes,
-    // Allow all elements to have className, style
+    // Allow 'className' and 'style' attributes on all tags (*).
+    // Merges existing default wildcard attributes with the new ones.
     '*': [...(defaultSchema.attributes?.['*'] || []), 'className', 'style']
   },
-  // Add support for tables and related elements
+  // Extend the allowed tag names.
   tagNames: [
+    // Inherit default tag names.
     ...(defaultSchema.tagNames || []),
+    // Explicitly allow table-related tags.
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td'
   ]
 };
 
 /**
- * Props for the StorySummary component
+ * @description Props for the StorySummary component.
+ * Defines the inputs required for rendering the story and comments summaries.
  */
 interface StorySummaryProps {
-  /** Summary of the story content */
+  /**
+   * @description Summary of the story content (usually the article).
+   * Optional Markdown string.
+   */
   storySummary?: string;
-  /** Summary of the comment section */
+  /**
+   * @description Summary of the comment section.
+   * Optional Markdown string.
+   */
   commentsSummary?: string;
-  /** Status of the summary generation process */
+  /**
+   * @description Status object indicating the generation progress of summaries.
+   * Optional object containing content status, comments status, and last update timestamp.
+   */
   status?: {
+    /** Status for the main content summary ('pending', 'completed', 'failed'). */
     content: string;
+    /** Status for the comments summary ('pending', 'completed', 'failed'). */
     comments: string;
+    /** Unix timestamp (seconds) of the last status update. */
     updatedAt: number;
   };
-  /** Whether the story has a URL (for Ask HN, Show HN posts) */
+  /**
+   * @description Flag indicating if the original Hacker News story has an external URL.
+   * Defaults to true. Used to differentiate link posts from Ask HN/Show HN.
+   */
   hasUrl?: boolean;
-  /** Index of this summary in the list */
+  /**
+   * @description The unique index of this summary component within its parent list.
+   * Used for managing expansion state in the context.
+   */
   index: number;
-  /** Hacker News ID of the story (for permalinks) */
+  /**
+   * @description The Hacker News ID of the story.
+   * Optional number used for generating permalinks.
+   */
   hnId?: number;
-  /** Whether to force all content to be expanded (no collapsing) */
+  /**
+   * @description If true, forces the summary content to always be displayed in expanded state.
+   * Defaults to false. Overrides the context-based expansion state.
+   */
   forceExpanded?: boolean;
-  /** Whether to hide permalink sharing buttons */
+  /**
+   * @description If true, hides the 'Copy link' button.
+   * Defaults to false.
+   */
   hidePermalinks?: boolean;
 }
 
 /**
- * @description Component that displays previews of AI-generated summaries with expand/collapse functionality.
- * Relies on SummaryContext for expansion state.
+ * @description Displays AI-generated summaries (story and comments) in an expandable card format.
+ * It handles loading states, content previewing, expansion toggling, permalink copying,
+ * and Markdown rendering with sanitization.
  * @param {StorySummaryProps} props - The props for the component.
- * @returns {JSX.Element} The rendered StorySummary component.
+ * @returns {JSX.Element | null} The rendered summary card, a loading indicator, or null if summaries failed.
+ * @example
+ * <StorySummary
+ *   storySummary="# Article\\nDetails..."
+ *   commentsSummary="## Discussion\\nPoints..."
+ *   status={{ content: 'completed', comments: 'completed', updatedAt: 1678886400 }}
+ *   index={0}
+ *   hnId={12345}
+ * />
+ * @remarks Uses `SummaryContext` for managing expansion state across multiple summaries.
+ * Leverages `ReactMarkdown` for rendering and `rehype-sanitize` for security.
  */
 export const StorySummary: React.FC<StorySummaryProps> = ({
-  storySummary,
-  commentsSummary,
-  status,
-  hasUrl = true,
-  index,
-  hnId,
-  forceExpanded = false,
-  hidePermalinks = false
+  // Destructure props with default values.
+  storySummary, // Optional story summary string.
+  commentsSummary, // Optional comments summary string.
+  status, // Optional status object.
+  hasUrl = true, // Default hasUrl to true.
+  index, // Required index number.
+  hnId, // Optional Hacker News ID number.
+  forceExpanded = false, // Default forceExpanded to false.
+  hidePermalinks = false // Default hidePermalinks to false.
 }) => {
-  // Track when permalink is copied for UI feedback
-  const [articleCopied, setArticleCopied] = useState(false);
+  // State to manage the visual feedback for the 'Copy link' button.
+  const [linkCopied, setLinkCopied] = useState(false);
 
-  // Access the summary context to get expansion state and control functions
+  // Retrieve expansion state and control functions from the SummaryContext.
   const { isExpanded, toggleSummary, registerSummary } = useSummary();
 
-  // Register this summary with the context on mount
+  // Effect hook to register this summary instance with the context when the component mounts or index changes.
   useEffect(() => {
-    // Inform the context that this summary instance exists
+    // Call the register function from the context with the current index.
     registerSummary(index);
-    // We don't need a cleanup function to unregister, as the context
-    // manages state based on the registeredIndices list which persists
+    // Dependency array ensures this effect runs only when index or registerSummary function changes.
   }, [index, registerSummary]);
 
-  // Determine if this specific summary should be expanded
-  // Reads directly from context, or respects forceExpanded prop
+  // Determine the current expansion state for this specific summary instance.
+  // It's expanded if forceExpanded is true OR if the context indicates it's expanded for this index.
   const currentExpandedState = forceExpanded || isExpanded(index);
 
   /**
-   * Handle clicking the "Show more" / "Show less" button.
-   * Calls the context's toggle function for this summary's index.
-   * @returns {void}
+   * @description Callback function to toggle the expansion state of this summary.
+   * Uses `useCallback` for performance optimization, preventing recreation on re-renders unless dependencies change.
    */
   const handleToggleExpanded = useCallback(() => {
-    // Tell the context to flip the state for this index
+    // Call the toggle function from the context with the current index.
     toggleSummary(index);
+    // Dependency array ensures the callback is stable unless index or toggleSummary changes.
   }, [index, toggleSummary]);
 
   /**
-   * Generate a permalink for the current summary section.
-   * @param {'article' | 'comments'} section - Which summary section to link to.
-   * @returns {string} The permalink URL, or empty string if no hnId.
+   * @description Callback function to copy the story's permalink to the user's clipboard.
+   * Uses `useCallback` for performance optimization.
    */
-  const generatePermalink = useCallback((section: 'article' | 'comments'): string => {
-    // Check if hnId is available
+  const handleCopyLink = useCallback(() => {
+    // Exit early if hnId is not available (e.g., permalinks hidden or data missing).
     if (!hnId) {
-      // Return empty string if no ID
-      return '';
-    }
-
-    // Create the base URL for the story page
-    const baseUrl = `/story/${hnId}`;
-
-    // Add hash fragment for comments section if requested
-    // Return the appropriate URL
-    return section === 'comments' ? `${baseUrl}#comments` : baseUrl;
-  }, [hnId]); // Depend only on hnId
-
-  /**
-   * Copy a permalink to the clipboard and show feedback.
-   * @param {'article' | 'comments'} section - Which summary section to link to.
-   * @returns {void}
-   */
-  const copyPermalink = useCallback((section: 'article' | 'comments') => {
-    // Generate the relative URL using the helper function
-    const relativeUrl = generatePermalink(section);
-
-    // If no URL could be generated, exit early
-    if (!relativeUrl) {
-      // Return nothing
+      // Return void, indicating no action was taken.
       return;
     }
-
-    // Create absolute URL by combining window origin with the relative path
-    const absoluteUrl = `${window.location.origin}${relativeUrl}`;
-
-    // Use the Clipboard API to write the text
-    navigator.clipboard.writeText(absoluteUrl)
-      .then(() => {
-        // On success, show visual feedback (checkmark)
-        setArticleCopied(true);
-        // Log success to console
-        console.log('Permalink copied to clipboard');
-        // Reset the copied state after 2 seconds
-        setTimeout(() => setArticleCopied(false), 2000);
-      })
-      .catch(err => {
-        // On failure, log the error
-        console.error('Failed to copy permalink:', err);
-      });
-  }, [generatePermalink]); // Depend on generatePermalink callback
+    // Construct the absolute permalink URL using the current window origin and the hnId.
+    const permalink = `${window.location.origin}/story/${hnId}`;
+    // Use the Clipboard API to write the permalink text.
+    navigator.clipboard.writeText(permalink).then(() => {
+      // On successful copy:
+      // Set the linkCopied state to true to show feedback.
+      setLinkCopied(true);
+      // Set a timeout to reset the feedback message after 2 seconds (2000ms).
+      setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(err => {
+      // On failed copy:
+      // Log an error message to the console.
+      console.error('Failed to copy permalink:', err);
+    });
+    // Dependency array includes hnId, as the permalink depends on it.
+  }, [hnId]);
 
   /**
-   * Extracts the first Markdown heading (#) from the text, or a short preview.
-   * Used for the collapsed state display.
-   * @param {string | undefined} text - The full text to extract the heading from.
-   * @returns {string} The first heading, or a short preview if no heading is found.
+   * @description Callback function to extract the main content body from Markdown.
+   * Skips an initial H1/H2 heading line if present and returns the remaining text.
+   * Used to feed content to the preview renderer, which handles visual truncation (line clamping) via CSS.
+   * @param {string | undefined} text - The full Markdown text.
+   * @returns {string} The text after the initial heading (if any), or the original text, or an empty string.
    */
-  const extractFirstHeading = useCallback((text?: string): string => {
-    // If text is empty or undefined, return empty string
+  const extractPreview = useCallback((text?: string): string => {
+    // If the input text is null, undefined, or empty, return an empty string.
     if (!text) {
-      // Return empty string
+      // Return an empty string as there's no text to preview.
       return '';
     }
 
-    // Regex to find the first Markdown heading (e.g., # Heading)
-    // Looks for 1-6 # characters at the start of a line, followed by space, then captures the text
-    const headingMatch = text.match(/^(#{1,6}\s+.+?)($|\n)/m);
-
-    // If a heading is found
-    if (headingMatch) {
-      // Return the captured heading text (group 1)
-      return headingMatch[1];
+    // --- Determine the starting text (skip initial H1/H2) --- 
+    let contentToPreview = text;
+    const initialHeadingRegex = /^\s*(?:#|##)\s+/;
+    const initialMatch = text.match(initialHeadingRegex);
+    if (initialMatch && initialMatch.index === 0) {
+      const newlineIndex = text.indexOf('\n', initialMatch.index);
+      if (newlineIndex !== -1) {
+        contentToPreview = text.substring(newlineIndex + 1).trimStart();
+      } else {
+        return ''; // Only heading was present
+      }
     }
-
-    // If no heading found, get the first line (up to 100 chars) as a preview
-    const firstLineMatch = text.match(/^(.{1,100})($|\n)/);
-    // Return the first line with ellipsis, or just substring with ellipsis if no newline
-    return firstLineMatch ? `${firstLineMatch[1]}...` : `${text.substring(0, 100)}...`;
-  }, []); // No dependencies, this is a pure function of its input
+    // Return the content after the potential heading removal.
+    return contentToPreview;
+    // Empty dependency array means this callback never changes once created.
+  }, []);
 
   /**
-   * Checks if the content summary is ready to be displayed based on status.
-   * @returns {boolean} True if the story summary is complete and exists.
+   * @description Callback to determine if the main story summary content is ready for display.
+   * Checks both the status flag and the presence of the summary text.
+   * Uses `useCallback` for optimization.
+   * @returns {boolean} True if the content is ready, false otherwise.
    */
-  const isContentReady = useCallback((): boolean => {
-    // If no status is provided, rely only on the existence of the summary string
+  const isContentReady = useCallback(() => {
+    // If there's no status object, readiness depends solely on whether storySummary has content.
     if (!status) {
-      // Return true if storySummary is truthy
+      // Return true if storySummary is truthy (not null, undefined, or empty string), false otherwise.
       return !!storySummary;
     }
-    // Check if status indicates completion and summary exists
-    // Return true only if both conditions are met
+    // If status exists, content is ready only if status.content is 'completed' AND storySummary has content.
     return status.content === "completed" && !!storySummary;
-  }, [status, storySummary]); // Depends on status and storySummary
+    // Dependencies: status object and storySummary string.
+  }, [status, storySummary]);
 
   /**
-   * Checks if the comments summary is ready to be displayed based on status.
-   * @returns {boolean} True if the comments summary is complete and exists.
+   * @description Callback to determine if the comments summary content is ready for display.
+   * Checks both the status flag and the presence of the summary text.
+   * Uses `useCallback` for optimization.
+   * @returns {boolean} True if the comments summary is ready, false otherwise.
    */
-  const isCommentsReady = useCallback((): boolean => {
-    // If no status is provided, rely only on the existence of the summary string
+  const isCommentsReady = useCallback(() => {
+    // If there's no status object, readiness depends solely on whether commentsSummary has content.
     if (!status) {
-      // Return true if commentsSummary is truthy
+      // Return true if commentsSummary is truthy, false otherwise.
       return !!commentsSummary;
     }
-    // Check if status indicates completion and summary exists
-    // Return true only if both conditions are met
+    // If status exists, comments are ready only if status.comments is 'completed' AND commentsSummary has content.
     return status.comments === "completed" && !!commentsSummary;
-  }, [status, commentsSummary]); // Depends on status and commentsSummary
+    // Dependencies: status object and commentsSummary string.
+  }, [status, commentsSummary]);
 
-  /**
-   * Gets the appropriate placeholder text based on generation status.
-   * @param {'content' | 'comments'} type - The type of summary (content or comments).
-   * @param {string | undefined} currentStatus - The current status string (e.g., "pending", "failed").
-   * @returns {string} Placeholder text to display.
-   */
-  const getPlaceholderText = useCallback((type: 'content' | 'comments', currentStatus?: string): string => {
-    // If no status is provided, return the default generating text
-    if (!currentStatus) {
-      // Return default text
-      return `Generating... check back soon.`;
+  // Calculate the preview for the story summary using useMemo for caching.
+  const storyPreview = useMemo(() => {
+    // If there is no story summary, return an empty string.
+    if (!storySummary) {
+      // Return empty string.
+      return '';
     }
+    // Otherwise, extract the preview from the story summary.
+    return extractPreview(storySummary);
+    // Dependencies: storySummary string and the extractPreview callback.
+  }, [storySummary, extractPreview]);
 
-    // Use a switch statement for different status messages
-    switch (currentStatus) {
-      // Case: Summary generation is pending
-      case 'pending':
-        // Return pending text
-        return `Generating... check back soon.`;
-      // Case: Summary generation is being retried
-      case 'retrying':
-        // Return retrying text
-        return `Retrying generation... check back soon.`;
-      // Case: Summary generation failed
-      case 'failed':
-        // Return specific failure message based on type
-        return `${type === 'content' ? 'Story' : 'Comments'} summary generation failed`;
-      // Case: Summary generation is complete (but content might be missing)
-      case 'completed':
-        // Return completion text (used if content is unexpectedly empty)
-        return 'Processing complete.'; // Changed from 'Complete!' which could be confusing
-      // Default case for any other status
-      default:
-        // Return default generating text
-        return `Generating... check back soon.`;
+  // Calculate the preview for the comments summary using useMemo for caching.
+  const commentsPreview = useMemo(() => {
+    // If there is no comments summary, return an empty string.
+    if (!commentsSummary) {
+      // Return empty string.
+      return '';
     }
-  }, []); // No dependencies, pure function of inputs
+    // Otherwise, extract the preview from the comments summary.
+    return extractPreview(commentsSummary);
+    // Dependencies: commentsSummary string and the extractPreview callback.
+  }, [commentsSummary, extractPreview]);
 
-  // Check if the summaries are ready using the memoized functions
-  const storySummaryReady = isContentReady();
-  // Check if comments summary is ready
+  // Determine if the article summary content is available and ready.
+  const hasArticleSummary = isContentReady();
+  // Determine if the comments summary content is available and ready.
   const hasCommentsSummary = isCommentsReady();
 
-  // Generate the preview text for the collapsed story summary
-  // Memoized to avoid re-calculation unless dependencies change
-  const storyPreview = useMemo(() => {
-    // Return preview only if summary is ready, otherwise empty string
-    return storySummaryReady ? extractFirstHeading(storySummary) : '';
-  }, [storySummaryReady, storySummary, extractFirstHeading]); // Depends on readiness, content, and extractor function
+  // Determine if the "Show full" button should be displayed.
+  // Show if *any* summary content (story or comments) exists, as it might be clamped by CSS.
+  const needsExpansion = !!(storySummary || commentsSummary);
 
-  // Generate the preview text for the collapsed comments summary
-  // Memoized to avoid re-calculation unless dependencies change
-  const commentsPreview = useMemo(() => {
-    // Return preview only if summary is ready, otherwise empty string
-    return hasCommentsSummary ? extractFirstHeading(commentsSummary) : '';
-  }, [hasCommentsSummary, commentsSummary, extractFirstHeading]); // Depends on readiness, content, and extractor function
+  /**
+   * @description Custom component renderers for `ReactMarkdown`.
+   * Provides specific styling and behavior for different Markdown elements.
+   */
+  const markdownComponents = {
+    // Never render H1 elements from the Markdown.
+    h1: ({ node, ...props }: any) => { /* Explicitly render nothing */ return null; },
+    // Never render H2 elements from the Markdown.
+    h2: ({ node, ...props }: any) => { /* Explicitly render nothing */ return null; },
+    // Render H3 elements with specific styling.
+    h3: ({ node, ...props }: any) => <h3 className="text-base font-semibold text-gray-900 mb-2 mt-4" {...props} />,
+    // Render paragraph elements with specific styling.
+    p: ({ node, ...props }: any) => <p className="mb-3 text-gray-700 leading-relaxed" {...props} />,
+    // Render unordered list elements with specific styling.
+    ul: ({ node, ...props }: any) => <ul className="mb-3 pl-5 list-disc text-gray-700 leading-relaxed" {...props} />,
+    // Render ordered list elements with specific styling.
+    ol: ({ node, ...props }: any) => <ol className="mb-3 pl-5 list-decimal text-gray-700 leading-relaxed" {...props} />,
+    // Render list item elements with specific styling.
+    li: ({ node, ...props }: any) => <li className="mb-1.5" {...props} />,
+    // Render anchor (link) elements with specific styling and security attributes.
+    a: ({ node, ...props }: any) => <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+    // Render blockquote elements with specific styling.
+    blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-gray-200 pl-4 italic text-gray-600 my-4" {...props} />,
+    // Render code elements (inline and block) with specific styling.
+    code: ({ node, className, children, ...props }: any) => {
+      // Check if the code block has a language class (e.g., language-javascript).
+      const match = /language-(\w+)/.exec(className || '');
+      // If it's a language-specific block (match found):
+      return match ? (
+        // Render as a <pre> block for code formatting.
+        <pre className="block bg-gray-100 p-3 rounded text-sm font-mono text-gray-800 overflow-x-auto my-3 leading-normal">
+          {/* Render the inner <code> tag with the language class. */}
+          <code className={`language-${match[1]}`} {...props}>
+            {/* Render the code content. */}
+            {children}
+          </code>
+        </pre>
+      ) : (
+        // If it's inline code (no language match):
+        // Render as an inline <code> tag with specific styling.
+        <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono text-gray-800" {...props}>
+          {/* Render the code content. */}
+          {children}
+        </code>
+      );
+    },
+    // Render table elements with specific styling.
+    table: ({ node, ...props }: any) => <table className="border-collapse w-full my-4 text-sm" {...props} />,
+    // Render table head elements with specific styling.
+    thead: ({ node, ...props }: any) => <thead className="bg-gray-50 border-b border-gray-300" {...props} />,
+    // Render table body elements.
+    tbody: ({ node, ...props }: any) => <tbody {...props} />,
+    // Render table row elements with specific styling.
+    tr: ({ node, ...props }: any) => <tr className="border-b border-gray-100 last:border-0" {...props} />,
+    // Render table header cell elements with specific styling.
+    th: ({ node, ...props }: any) => <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700" {...props} />,
+    // Render table data cell elements with specific styling.
+    td: ({ node, ...props }: any) => <td className="border border-gray-200 px-3 py-2 text-gray-800" {...props} />,
+    // Render strong (bold) elements with specific styling.
+    strong: ({ node, ...props }: any) => <strong className="font-semibold text-black" {...props} />,
+    // Render emphasis (italic) elements with specific styling.
+    em: ({ node, ...props }: any) => <em className="italic" {...props} />,
+    // Render horizontal rule elements with specific styling.
+    hr: ({ node, ...props }: any) => <hr className="my-4 border-t border-gray-200" {...props} />,
+  };
 
-  // If neither summary is ready to be shown, render a simple placeholder
-  // This handles the initial state before summaries are generated or fetched
-  if (!storySummaryReady && !hasCommentsSummary) {
-    // Return placeholder div
-    return (
-      // Outer container with margin
-      <div className="mt-2 text-xs leading-normal">
-        {/* Inner div with specific styling for placeholder text */}
-        <div className="italic text-[#828282] dark:text-zinc-400">
-          Generating summaries... check back soon.
+  // Handle the initial loading state before summaries are ready.
+  // If neither summary is ready:
+  if (!hasArticleSummary && !hasCommentsSummary) {
+    // Check if the status indicates summaries are still pending.
+    if (!status || (status.content === 'pending' && status.comments === 'pending')) {
+      // Return a loading message indicator.
+      return (
+        // Container for the loading message with padding and text styling.
+        <div className="p-3 text-sm text-gray-500">
+          {/* Loading message text. */}
+          Generating summaries. Check back soon...
         </div>
-      </div>
-    );
+      );
+    }
+    // If status is not pending (e.g., failed, or unexpected state) and summaries aren't ready, render nothing for now.
+    // Return null to render nothing for this component instance.
+    return null;
   }
 
-  // Determine if the expand/collapse button should be shown
-  // Logic: Not forced expanded, AND (is an article with a summary OR is comments-only with a summary)
-  const needsExpansion = !forceExpanded &&
-    (hasUrl ? storySummaryReady : hasCommentsSummary);
-
-
-  // Return the main summary component structure
+  // Main return statement for the component's JSX structure.
   return (
-    // Outer container with margin and text styling
-    <div className="mt-2 mb-1 text-xs leading-normal">
-      {/* --- Story Summary Section --- */}
-      {/* Conditionally render if the story summary is ready AND it's a story with a URL */}
-      {storySummaryReady && hasUrl && (
-        // Container for the story summary with border, padding, and background
-        <div className="mb-3 border-l-4 border-l-orange-300 dark:border-l-orange-700/50 rounded-md dark:bg-zinc-800/70 pb-3 pt-3 pr-6 pl-4 mr-4">
-          {/* Header row for the story summary section */}
-          <div className="flex items-center mb-3 justify-between">
-            {/* Badge indicating "Article Summary" */}
-            <span className="font-medium bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 text-xs px-2 py-0.5 rounded-full">
-              Article Summary
-            </span>
+    // Outermost container div.
+    <div>
+      {/* Container for the summary content itself, with zero padding initially. */}
+      <div className="p-0 text-sm">
+        {/* Conditional rendering based on the expansion state. */}
+        {currentExpandedState ? (
+          // --- RENDER EXPANDED VIEW ---
+          // Container for expanded content with vertical spacing between sections.
+          <div className="space-y-4">
+            {/* Conditionally render the full Article Summary section if it's available. */}
+            {hasArticleSummary && (
+              // Container for the article summary section.
+              <div>
+                {/* Badge indicating "Article Summary". Add sparkles icon. */}
+                <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 mb-2">
+                  {/* Sparkles Icon (Heroicons) */}
+                  <SparklesIcon className="w-3 h-3 mr-1" />
+                  Article Summary
+                </span>
+                {/* Render the full article summary Markdown content. */}
+                <ReactMarkdown
+                  components={markdownComponents}
+                  rehypePlugins={[[rehypeSanitize, { schema: sanitizeSchema }]]}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {storySummary || ''}
+                </ReactMarkdown>
+              </div>
+            )}
+            {/* Conditionally render the full Comments Summary section if it's available. */}
+            {hasCommentsSummary && (
+              // Container for the comments summary section. Apply top margin/border if article summary is also present.
+              <div className={`${hasArticleSummary ? 'mt-4 pt-4 border-t border-gray-100' : ''}`}>
+                {/* Badge indicating "Comments Summary". Add sparkles icon. */}
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 mb-2">
+                  {/* Sparkles Icon (Heroicons) */}
+                  <SparklesIcon className="w-3 h-3 mr-1" />
+                  Comments Summary
+                </span>
+                {/* Render the full comments summary Markdown content. */}
+                <ReactMarkdown
+                  components={markdownComponents}
+                  rehypePlugins={[[rehypeSanitize, { schema: sanitizeSchema }]]}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {commentsSummary || ''}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        ) : (
+          // --- RENDER COLLAPSED VIEW ---
+          // Container for collapsed content.
+          <div>
+            {/* Case 1: Article Summary exists (show its badge and preview). */}
+            {hasArticleSummary && (
+              // Container for the article summary preview.
+              // Added summary-preview-clamp class for CSS line clamping.
+              <div className="summary-preview-clamp">
+                {/* Badge indicating "Article Summary". Add sparkles icon. */}
+                <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 mb-2">
+                  {/* Sparkles Icon (Heroicons) */}
+                  <SparklesIcon className="w-3 h-3 mr-1" />
+                  Article Summary
+                </span>
+                {/* Render the article summary preview using Markdown components. */}
+                <ReactMarkdown
+                  components={markdownComponents}
+                  rehypePlugins={[[rehypeSanitize, { schema: sanitizeSchema }]]}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {storyPreview}
+                </ReactMarkdown>
+              </div>
+            )}
+            {/* Case 2: ONLY Comments Summary exists (show its badge and preview). */}
+            {/* This condition ensures we don't show comments preview if article preview is already shown. */}
+            {!hasArticleSummary && hasCommentsSummary && (
+              // Container for the comments summary preview.
+              // Added summary-preview-clamp class for CSS line clamping.
+              <div className="summary-preview-clamp">
+                {/* Badge indicating "Comments Summary". Add sparkles icon. */}
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 mb-2">
+                  {/* Sparkles Icon (Heroicons) */}
+                  <SparklesIcon className="w-3 h-3 mr-1" />
+                  Comments Summary
+                </span>
+                {/* Render the comments summary preview using Markdown components. */}
+                <ReactMarkdown
+                  components={markdownComponents}
+                  rehypePlugins={[[rehypeSanitize, { schema: sanitizeSchema }]]}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {commentsPreview}
+                </ReactMarkdown>
+              </div>
+            )}
+            {/* Case 3 (Neither summary exists) is handled by the loading state check further up, so no explicit rendering needed here. */}
+          </div>
+        )}
 
-            {/* Permalink Button - Conditionally render */}
-            {/* Conditions: hnId exists, permalinks not hidden, and section is expanded */}
-            {hnId && !hidePermalinks && currentExpandedState && (
-              // Button element for copying permalink
+        {/* --- Combined Action Buttons Area --- */}
+        {/* Conditionally render this action bar only if either the expansion button or the copy link button needs to be shown. */}
+        {(needsExpansion || (!hidePermalinks && hnId)) && (
+          // Container for action buttons. Flex layout, space between items, top margin.
+          <div className={`flex items-center justify-between mt-2`}>
+
+            {/* Conditionally render the "Show more" / "Show less" button if expansion is needed. */}
+            {needsExpansion ? (
+              // Button element to toggle expansion state.
               <button
-                // Action to perform on click
-                onClick={() => copyPermalink('article')}
-                // Styling for the button
-                className="text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300 hover:cursor-pointer transition-colors duration-150 focus:outline-none text-xs flex items-center"
-                // Tooltip text
-                title="Copy permalink to article summary"
-                // Accessibility label
-                aria-label="Copy permalink to article summary"
+                // Attach the click handler.
+                onClick={handleToggleExpanded}
+                // Styling for the button (link-like appearance).
+                // Add cursor-pointer class.
+                className="flex items-center text-xs text-gray-500 hover:text-blue-700 transition-colors duration-150 cursor-pointer"
               >
-                {/* Conditionally render Checkmark or Link icon based on copied state */}
-                {articleCopied ? (
-                  // Show checkmark icon when copied
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  // Show link icon when not copied
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                )}
-                {/* Text label for the button */}
-                <span>Permalink</span>
+                {/* Dynamically set button text based on expansion state. */}
+                {currentExpandedState ? 'Show less' : 'Show full'}
+                {/* Chevron icon indicating expansion/collapse action. */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 ml-0 transition-transform ${currentExpandedState ? 'rotate-180' : ''}`}>
+                  {/* SVG path data for the chevron icon. */}
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.23 8.29a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </button>
+            ) : (
+              // If no expansion button is needed, render an empty span to maintain layout spacing with justify-between.
+              <span></span>
+            )}
+
+            {/* Conditionally render the "Copy link" button if permalinks are not hidden and hnId exists. */}
+            {!hidePermalinks && hnId && (
+              // Button element to copy the permalink.
+              <button
+                // Attach the click handler.
+                onClick={handleCopyLink}
+                // Styling: flex layout, text size, transition. Dynamically change text color based on 'linkCopied' state.
+                // Add cursor-pointer class.
+                className={`flex items-center text-xs transition-colors duration-150 cursor-pointer ${linkCopied ? 'text-green-600' : 'text-gray-500 hover:text-blue-600'}`}
+              >
+                {/* Dynamically set button text based on 'linkCopied' state. */}
+                {linkCopied ? 'Copied!' : 'Copy link'}
+                {/* Link icon. */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-1">
+                  {/* SVG path data for the link icon. */}
+                  <path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-1.225 1.224a.75.75 0 001.061 1.06l1.224-1.224a4 4 0 00-5.656-5.656l-3 3a4 4 0 00.225 5.865.75.75 0 00.977-1.138 2.5 2.5 0 01-.142-3.667l3-3z" />
+                  {/* More SVG path data. */}
+                  <path d="M11.603 7.963a.75.75 0 00-.977 1.138 2.5 2.5 0 01.142 3.667l-3 3a2.5 2.5 0 01-3.536-3.536l1.225-1.224a.75.75 0 00-1.061-1.06l-1.224 1.224a4 4 0 105.656 5.656l3-3a4 4 0 00-.225-5.865z" />
+                </svg>
               </button>
             )}
+
           </div>
-
-          {/* Content Area: Show full summary or preview based on expansion state */}
-          {/* Container for the markdown content */}
-          <div className="text-black dark:text-zinc-200 markdown-content">
-            {/* Use ternary operator to display full content or preview */}
-            {currentExpandedState ? (
-              // Render full story summary if expanded
-              <ReactMarkdown
-                // Plugin for GitHub Flavored Markdown (tables, strikethrough, etc.)
-                remarkPlugins={[remarkGfm]}
-                // Plugin for sanitizing HTML output, using our custom schema
-                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-              >
-                {/* Pass the story summary string, default to empty string */}
-                {storySummary || ''}
-              </ReactMarkdown>
-            ) : (
-              // Render preview (first heading or excerpt) if collapsed
-              <ReactMarkdown
-                // Plugin for GitHub Flavored Markdown
-                remarkPlugins={[remarkGfm]}
-                // Plugin for sanitizing HTML output
-                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-              >
-                {/* Pass the generated story preview, default to empty string */}
-                {storyPreview || ''}
-              </ReactMarkdown>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* --- Comments Summary Section --- */}
-      {/* Conditionally render if it's comments-only OR if expanded and comments exist */}
-      {((!hasUrl && hasCommentsSummary) || (currentExpandedState && hasCommentsSummary)) && (
-        // Container for the comments summary with border, padding, background
-        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-4 pt-3 pr-6 pl-4 mr-4 comments-summary">
-          {/* Header row for the comments summary section */}
-          <div className="flex items-center mb-3">
-            {/* Badge indicating "Comments Summary" */}
-            <span className="font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
-              Comments Summary
-            </span>
-            {/* Permalink button intentionally removed for comments as per previous requirement */}
-          </div>
-
-          {/* Content Area: Show full summary or preview based on expansion state and URL presence */}
-          {/* Container for the markdown content */}
-          <div className="text-black dark:text-zinc-200 markdown-content">
-            {/* Determine whether to show preview or full comments summary */}
-            {/* Show preview if it's comments-only AND collapsed */}
-            {!hasUrl && !currentExpandedState ? (
-              // Render preview if comments-only and collapsed
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-              >
-                {/* Pass the comments preview string */}
-                {commentsPreview || ''}
-              </ReactMarkdown>
-            ) : (
-              // Render full comments summary otherwise (expanded or hasUrl)
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-              >
-                {/* Pass the full comments summary string */}
-                {commentsSummary || ''}
-              </ReactMarkdown>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* --- Comments Summary Placeholder --- */}
-      {/* Show if expanded AND comments summary is NOT ready AND story summary IS ready AND status exists */}
-      {currentExpandedState && !hasCommentsSummary && storySummaryReady && status && (
-        // Container for the placeholder with styling similar to comments summary
-        <div className="border-l-4 border-l-blue-300 dark:border-l-blue-700/50 rounded-md bg-blue-50/30 dark:bg-zinc-800/70 pb-3 pt-3 pr-6 pl-4 mr-4">
-          {/* Header row */}
-          <div className="flex items-center mb-3">
-            {/* Badge indicating "Comments Summary" */}
-            <span className="font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
-              Comments Summary
-            </span>
-          </div>
-
-          {/* Placeholder text area */}
-          {/* Container for the italicized placeholder text */}
-          <div className="text-black dark:text-zinc-200 italic">
-            {/* Get the appropriate placeholder based on the comments status */}
-            {getPlaceholderText('comments', status.comments)}
-          </div>
-        </div>
-      )}
-
-      {/* --- Expand/Collapse Button --- */}
-      {/* Conditionally render the button if expansion is needed (not forced) */}
-      {needsExpansion && (
-        // Container for the button and optional permalink button
-        <div className="mt-3 text-left flex items-center gap-2">
-          {/* The "Show more" / "Show less" button */}
-          <button
-            // Call the handler to toggle expansion state in the context
-            onClick={handleToggleExpanded}
-            // Styling for the button
-            className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm"
-          >
-            {/* Dynamically set button text based on current expansion state */}
-            {currentExpandedState ? 'Show less' : 'Show more'}
-          </button>
-
-          {/* Adjacent Permalink Button - Conditionally render */}
-          {/* Conditions: Expanded, hnId exists, permalinks not hidden, and it's an article (hasUrl) */}
-          {currentExpandedState && hnId && !hidePermalinks && hasUrl && (
-            // Button element for copying permalink
-            <button
-              // Action to perform on click
-              onClick={() => copyPermalink('article')}
-              // Styling for the button (slightly different appearance)
-              className="text-gray-600 bg-gray-100 dark:bg-zinc-900 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-800 px-3 py-1 rounded-full text-xs font-medium flex items-center cursor-pointer transition-colors shadow-sm"
-              // Tooltip text
-              title="Copy permalink to article summary"
-              // Accessibility label
-              aria-label="Copy permalink to article summary"
-            >
-              {/* Conditionally render Checkmark or Link icon */}
-              {articleCopied ? (
-                // Show checkmark icon when copied
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                // Show link icon when not copied
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-              )}
-              {/* Text label for the button */}
-              <span>Permalink</span>
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-  // End of StorySummary component
 }; 

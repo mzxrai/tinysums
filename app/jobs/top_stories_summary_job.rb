@@ -258,10 +258,10 @@ class TopStoriesSummaryJob
 
       # Save the summary to the database and log the result
       save_summary(summary, content, "content", story.hn_id)
-    rescue => e
-      # Log any errors that occur during generation
-      # This helps with debugging AI-related issues
-      log_generation_error("content", story.hn_id, e)
+      # rescue => e
+      #   # Log any errors that occur during generation
+      #   # This helps with debugging AI-related issues
+      #   log_generation_error("content", story.hn_id, e)
     end
   end
 
@@ -275,6 +275,7 @@ class TopStoriesSummaryJob
     # The extraction adapter helps fetch and parse the article content
     summarizer = Ai::HnStorySummarizer.new(
       Ai::AdapterFactory.default_extraction_adapter,
+      adapter,
       adapter,
       story.hn_id
     )

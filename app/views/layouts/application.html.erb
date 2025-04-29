@@ -10,31 +10,6 @@
 
     <%= yield :head %>
 
-    <%# Theme detection script - Applied before page render to prevent flash %>
-    <script>
-      (function() {
-        // Try to get theme from localStorage first
-        var storedTheme = localStorage.getItem('themePreference');
-        var theme = 'light';
-        
-        if (storedTheme) {
-          // Use stored preference if available
-          theme = storedTheme;
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          // Fall back to system preference
-          theme = 'dark';
-        }
-        
-        // Apply theme immediately
-        document.documentElement.setAttribute('data-theme', theme);
-        
-        // Set background color immediately to avoid flash
-        var bgColor = theme === 'dark' ? 'rgb(9, 9, 11)' : '#f6f6ef';
-        document.documentElement.style.backgroundColor = bgColor;
-        document.body.style.backgroundColor = bgColor;
-      })();
-    </script>
-
     <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
     <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
 
@@ -47,8 +22,8 @@
     <%= javascript_include_tag "application", "data-turbo-track": "reload", type: "module" %>
   </head>
 
-  <%# Apply base dark theme classes to the body %>
-  <body class="font-sans antialiased">
+  <%# Apply base dark theme classes and subtle background to the body %>
+  <body class="font-sans antialiased bg-zinc-50/50">
     <%= yield %>
   </body>
 </html>

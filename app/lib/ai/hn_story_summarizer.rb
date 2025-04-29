@@ -1,6 +1,9 @@
 # Service for summarizing Hacker News story articles
 # Uses a two-stage AI approach to extract content and create dev-focused summaries
 class Ai::HnStorySummarizer
+  # Custom error for extraction failures
+  class ExtractionError < StandardError; end
+
   # Default options for story summarization
   DEFAULT_OPTIONS = {
     # Maximum story text length for summarization
@@ -20,20 +23,53 @@ class Ai::HnStorySummarizer
     max_attempts: 3
   }.freeze
 
+  # JSON schema for Gemini classification response.
+  # Ensures the response contains a 'status' field with specific allowed values.
+  # Reference: https://ai.google.dev/gemini-api/docs/structured-output?lang=rest
+  CLASSIFICATION_SCHEMA = {
+    # Specify the top-level type as OBJECT.
+    type: "OBJECT",
+    # Define the properties within the object.
+    properties: {
+      # Define the 'status' property.
+      status: {
+        # Specify the type as STRING.
+        type: "STRING",
+        # Specify the allowed enum values for status.
+        enum: [ "success", "failure" ],
+        # Provide a description for the status field.
+        description: "Indicates if the text suggests successful URL access and content extraction ('success') or a failure ('failure')."
+      },
+      # Define the 'reason' property (optional).
+      reason: {
+        # Specify the type as STRING.
+        type: "STRING",
+        # Provide a description for the reason field.
+        description: "Optional brief explanation if status is 'failure'."
+      }
+    },
+    # Specify that the 'status' property is required.
+    required: [ "status" ]
+  }.freeze
+
   # Define attribute readers/accessors for instance variables
-  attr_reader :extraction_adapter, :summary_adapter, :hn_client, :options, :story
+  attr_reader :extraction_adapter, :summary_adapter, :extraction_classifier_adapter, :hn_client, :options, :story
 
   # Initialize the story summarizer
-  # @param extraction_adapter [Ai::BaseAiAdapter] the AI adapter to use for content extraction
+  # @param extraction_adapter [Ai::BaseAiAdapter] the AI adapter to use for content extraction (e.g., Perplexity)
   # @param summary_adapter [Ai::BaseAiAdapter] the AI adapter to use for dev-focused summarization
+  # @param extraction_classifier_adapter [Ai::BaseAiAdapter] the AI adapter used for classifying extraction results
   # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] options to override defaults
-  def initialize(extraction_adapter, summary_adapter, story_id, options = {})
+  def initialize(extraction_adapter, summary_adapter, extraction_classifier_adapter, story_id, options = {})
     # Save the AI adapter for content extraction (Stage 1)
     @extraction_adapter = extraction_adapter
 
     # Save the AI adapter for dev-focused summarization (Stage 2)
     @summary_adapter = summary_adapter
+
+    # Save the AI adapter for classifying extraction results
+    @extraction_classifier_adapter = extraction_classifier_adapter
 
     # Create a new HN API client
     @hn_client = HnApiClient.new
@@ -73,17 +109,8 @@ class Ai::HnStorySummarizer
     # Fetch the story details from the HN API
     story = fetch_story_details(story_id)
 
-    # Log the story details for debugging purposes
-    Rails.logger.debug("Story details: #{story.inspect}")
-
     # Raise an error if no story was found with this ID
     raise "Story not found" unless story
-
-    # For Ask HN or Show HN posts that don't have a URL, return the story but log a message
-    unless story["url"]
-      Rails.logger.info("Story ##{story_id} is a text post without URL, will skip content summary")
-      return story
-    end
 
     # Return the validated story object
     story
@@ -108,74 +135,84 @@ class Ai::HnStorySummarizer
 
   # Helper method to attempt content extraction with retries
   # @param max_attempts [Integer] maximum number of attempts to try
-  # @return [Array] [content, citations] from the extraction
+  # @return [Array] [content, citations] from the extraction on success
+  # @raise [ExtractionError] if extraction fails after all attempts
   def attempt_extraction_with_retries(max_attempts)
     # Initialize attempt counter to first attempt
     attempt_count = 1
 
+    # Variable to store the last error encountered
+    last_error = nil
+
     # Loop until we get successful content or exhaust retry attempts
     while attempt_count <= max_attempts
       # Log current attempt if not the first attempt
-      log_extraction_attempt(attempt_count, max_attempts) if attempt_count > 1
+      Rails.logger.info("Attempt #{attempt_count}/#{max_attempts} for extracting content from URL: #{story['url']}") \
+        if attempt_count > 1
 
-      # Try a single extraction using helper method
-      content, citations = try_single_extraction
+      # Try a single extraction, catching our specific error
+      begin
+        # Attempt the extraction, which might raise ExtractionError
+        content, citations = try_single_extraction
 
-      # Check if extraction failed due to URL access issue
-      if content_has_access_failure?(content)
-        # Log this specific failure type for monitoring
-        Rails.logger.error("Content extraction attempt #{attempt_count}/#{max_attempts} failed: Model unable to access URL")
+        # If successful, return the content and citations immediately
+        return [ content, citations ]
 
-        # Increment attempt counter for next try
+      # If extraction fails with our specific error
+      rescue ExtractionError => e
+        # Store the error details
+        last_error = e
+
+        # Log the failure for this attempt
+        Rails.logger.error("Content extraction attempt #{attempt_count}/#{max_attempts} failed: #{e.message}")
+
+        # Increment attempt counter
         attempt_count += 1
 
-        # Try again if we haven't reached maximum attempts
-        next if attempt_count <= max_attempts
+        # Continue to the next iteration if attempts remain
+        next
       end
-
-      # Return result (either success or final failed attempt)
-      return [ content, citations ]
     end
-  end
 
-  # Helper method to check if content has access failure message
-  # @param content [String] the content to check
-  # @return [Boolean] true if content indicates URL access failure
-  def content_has_access_failure?(content)
-    # Check if content exists and contains the "unable to access" phrase
-    content && content.match?(/unable to access/i)
-  end
-
-  # Helper method to log extraction attempt
-  # @param attempt_count [Integer] current attempt number
-  # @param max_attempts [Integer] maximum number of attempts
-  def log_extraction_attempt(attempt_count, max_attempts)
-    # Log the current retry attempt number and URL being accessed
-    Rails.logger.info("Attempt #{attempt_count}/#{max_attempts} for extracting content from URL: #{story['url']}")
+    # If the loop finishes, it means all attempts failed
+    # Raise a final error indicating persistent failure, including the last error message
+    raise ExtractionError, "Content extraction failed after #{max_attempts} attempts. Last error: #{last_error&.message}"
   end
 
   # Helper method to try a single extraction
   # @return [Array] [content, citations] from the extraction
+  # @raise [ExtractionError] if content extraction fails due to access issues or other errors
   def try_single_extraction
     # Generate system and user prompts for the extraction AI model
     system_prompt, user_prompt = create_extraction_prompts
 
-    # Try to extract content, handling potential errors
+    # Initialize content and citations
+    content = nil
+    citations = []
+
+    # Try to extract content from the adapter
     begin
       # Call the AI adapter to process the URL and extract content
       content, citations = extraction_adapter.complete(system_prompt, user_prompt)
 
-      # Log success information if we have valid content
+      # Check if the AI model reported an access failure
+      if content_has_access_failure?(content)
+        # Raise specific error for access failure
+        raise ExtractionError, "Model unable to access URL: #{story['url']}"
+      end
+
+      # Log success information only if we have valid content (which implies no error was raised)
       log_extraction_success(content, citations) unless content.nil? || content.strip.empty?
 
-      # Return the extracted content and citations
+      # Return the extracted content and citations on success
       [ content, citations ]
+    # Rescue standard errors from the adapter call itself
     rescue StandardError => e
       # Log the specific error details for debugging
-      Rails.logger.error("Content extraction failed: #{e.message}")
+      Rails.logger.error("Content extraction failed during adapter call: #{e.message}")
 
-      # Return error message as content with empty citations
-      [ "Failed to extract article content: #{e.message}", [] ]
+      # Wrap the original error in our custom extraction error
+      raise ExtractionError, "Extraction adapter failed: #{e.message}", cause: e
     end
   end
 
@@ -197,7 +234,8 @@ class Ai::HnStorySummarizer
   # @param content [String] the technical content from Stage 1
   # @param citations [Array] array of citation URLs from Stage 1
   # @return [String] the dev-focused summary
-  # @raise [RuntimeError] if summarization fails
+  # @raise [RuntimeError] if the generated summary is empty
+  # @raise [StandardError] Propagates errors from the summary adapter
   def generate_dev_summary(content, citations = [])
     # Log that we're starting the dev summary generation process
     Rails.logger.info("Stage 2: Generating dev-focused summary for story ##{story['id']}")
@@ -205,29 +243,22 @@ class Ai::HnStorySummarizer
     # Create the system and user prompts for dev summarization
     system_prompt, user_prompt = create_dev_summary_prompts(content, citations)
 
-    begin
-      # Call the summary adapter to generate the dev-focused summary
-      # The summary adapter will return a string, not an array with citations
-      summary = summary_adapter.complete(system_prompt, user_prompt)
+    # Call the summary adapter to generate the dev-focused summary
+    # The summary adapter will return a string, not an array with citations
+    # Any StandardError from the adapter will propagate
+    summary = summary_adapter.complete(system_prompt, user_prompt)
 
-      # Check if the generated summary is empty or invalid
-      if !summary || summary.strip.empty?
-        # Raise an error if we got an empty summary
-        raise "Empty dev summary generated for URL: #{story['url']}"
-      end
-
-      # Log that the summarization completed successfully
-      Rails.logger.info("Stage 2 complete: Successfully generated dev-focused summary")
-
-      # Return the generated summary
-      summary
-    rescue StandardError => e
-      # Log the error that occurred during summarization
-      Rails.logger.error("Dev summarization failed: #{e.message}")
-
-      # Re-raise the error with a more descriptive message
-      raise "Failed to generate dev summary: #{e.message}"
+    # Check if the generated summary is empty or invalid
+    if !summary || summary.strip.empty?
+      # Raise an error if we got an empty summary
+      raise "Empty dev summary generated for URL: #{story['url']}"
     end
+
+    # Log that the summarization completed successfully
+    Rails.logger.info("Stage 2 complete: Successfully generated dev-focused summary")
+
+    # Return the generated summary
+    summary
   end
 
   # Fetch a story's details
@@ -342,10 +373,16 @@ class Ai::HnStorySummarizer
     system_prompt = instructions
 
     # Format citations as numbered references if present
+    # Initialize an empty string to hold the formatted citations.
     formatted_citations = ""
+    # Check if the citations array is not empty.
     unless citations.empty?
+      # If citations exist, start the formatted string with a Markdown heading for citations, preceded by newlines for spacing.
       formatted_citations = "\n\n## Citations\n\n"
+      # Iterate over each citation along with its index (starting from 0).
       citations.each_with_index do |citation, index|
+        # Append the formatted citation (e.g., "[1] http://example.com") followed by a newline.
+        # We add 1 to the index because list numbering typically starts from 1, not 0.
         formatted_citations += "[#{index + 1}] #{citation}\n"
       end
     end
@@ -377,5 +414,166 @@ class Ai::HnStorySummarizer
 
     # Return an array containing both the system prompt and user prompt
     [ system_prompt, user_prompt ]
+  end
+
+  # Builds the system and user prompts for the Gemini classification request.
+  #
+  # @param content [String] The text content to be classified.
+  # @return [Array<String>] An array containing [system_prompt, user_prompt].
+  def build_classification_prompts(content)
+    # Define the system prompt instructing Gemini on its classification task.
+    system_prompt = <<~SYSTEM
+      You are an expert text classifier. You analyze text provided to you, which is the output from another AI model
+      whose task was to access a URL and extract its technical content. Your job is to determine if the provided text
+      indicates that the original AI *successfully* accessed the URL and extracted meaningful content, or if it
+      indicates a *failure* in the AI's URL access/content extraction process.
+
+      *Failures* include: explicit error messages, "unable to access", generic boilerplate, empty/short responses,
+      error page content, etc.
+
+      *Success* means the text looks like a plausible summary or extraction of article content. For a summary to be
+      considered a success, it should contain no indication that the extraction process failed.
+
+      Respond using the provided JSON schema.
+    SYSTEM
+
+    # Define the user prompt providing the text to classify.
+    user_prompt = <<~USER
+      Please classify the following text based on whether it indicates successful content extraction or a failure.
+      Use the provided JSON schema for your response.
+
+      Text to classify:
+
+      ```
+      #{content}
+      ```
+    USER
+
+    # Return the prompts.
+    [ system_prompt, user_prompt ]
+  end
+
+  # Calls the configured extraction classifier adapter with the given prompts.
+  # Uses the adapter's dedicated method for structured JSON output based on a schema.
+  # Handles potential errors during the API call.
+  #
+  # @param system_prompt [String] The system prompt for the classifier.
+  # @param user_prompt [String] The user prompt for the classifier.
+  # @return [String, nil] The raw JSON response text from the classifier, or nil if an error occurred.
+  def call_extraction_classifier(system_prompt, user_prompt)
+    # Log the attempt to call the classifier adapter.
+    Rails.logger.info("Attempting to classify extraction output via structured JSON...")
+
+    # Call the dedicated adapter method for structured JSON output, passing the required schema.
+    @extraction_classifier_adapter.complete_with_json_schema(
+      system_prompt,
+      user_prompt,
+      CLASSIFICATION_SCHEMA
+    )
+
+  # Rescue standard errors from the adapter call.
+  rescue StandardError => e
+    # Log the error encountered during the API call.
+    Rails.logger.error("Error calling extraction classifier adapter: #{e.message}")
+
+    # Return nil to indicate failure.
+    nil
+  end
+
+  # Parses and validates the JSON response from the extraction classifier.
+  # Ensures the response has the required structure and valid status.
+  #
+  # @param response_text [String, nil] The raw JSON response text from the classifier.
+  # @return [String] The validated status ("success" or "failure"), defaulting to "failure".
+  def parse_and_validate_classification(response_text)
+    # Default status to failure.
+    classification_status = "failure"
+
+    # Proceed only if response text is present.
+    if response_text.present?
+      # Parse the JSON response.
+      parsed_response = JSON.parse(response_text)
+
+      # Validate structure and status value.
+      classification_status = validate_parsed_status(parsed_response, response_text)
+    else
+      # Log warning if response text was empty.
+      Rails.logger.warn("Extraction classifier returned empty response.")
+    end
+
+    # Return the determined status (defaults to "failure").
+    classification_status
+  # Rescue JSON parsing errors.
+  rescue JSON::ParserError => e
+    # Log the parsing error.
+    Rails.logger.error("Error parsing extraction classification response: #{e.message}")
+
+    # Ensure status remains "failure".
+    "failure"
+  end
+
+  # Validates the status field within the parsed classification response.
+  # Helper for `parse_and_validate_classification`.
+  #
+  # @param parsed_response [Object] The result of JSON.parse.
+  # @param raw_response_text [String] The original JSON string (for logging).
+  # @return [String] "success" or "failure".
+  def validate_parsed_status(parsed_response, raw_response_text)
+    # Check if the parsed response is a hash and contains the required 'status' key.
+    if parsed_response.is_a?(Hash) && parsed_response.key?("status")
+      # Extract the status value.
+      status = parsed_response["status"]
+
+      # Return status if valid, otherwise log warning and return "failure".
+      return status if [ "success", "failure" ].include?(status)
+      Rails.logger.warn("Extraction classifier returned invalid status: '#{status}'.")
+    else
+      # Log warning if JSON structure is invalid.
+      Rails.logger.warn("Extraction classifier response invalid structure: #{raw_response_text}")
+    end
+
+    # Default to failure if validation fails.
+    "failure"
+  end
+
+  # Classifies the raw output from the extraction AI (Stage 1) using a classification model.
+  # Orchestrates calls to helper methods for prompt building, API call, and validation.
+  #
+  # @param content [String, nil] The raw text content produced by the extraction adapter.
+  # @return [String] Returns "success" if classification indicates successful extraction,
+  #   "failure" otherwise.
+  def classify_extraction_output(content)
+    # Handle nil or empty content immediately.
+    return "failure" if content.nil? || content.strip.empty?
+
+    # Build the prompts for the classifier.
+    system_prompt, user_prompt = build_classification_prompts(content)
+
+    # Call the classifier adapter.
+    response_text = call_extraction_classifier(system_prompt, user_prompt)
+
+    # Parse and validate the response.
+    classification_status = parse_and_validate_classification(response_text)
+
+    # Log the final classification result.
+    Rails.logger.info("Extraction classification final status: #{classification_status}")
+
+    # Return the final status.
+    classification_status
+  end
+
+  # Helper method to check if content has access failure message.
+  # Uses a classifier model to analyze the content and determine if it indicates
+  # a successful extraction or a failure.
+  #
+  # @param content [String] the content to check
+  # @return [Boolean] true if content indicates URL access failure based on classification
+  def content_has_access_failure?(content)
+    # Use the new classification system instead of simple string matching.
+    # Classify the content using the dedicated classifier method.
+    status = classify_extraction_output(content)
+
+    # Return true only if the classification status is "failure".
+    status == "failure"
   end
 end

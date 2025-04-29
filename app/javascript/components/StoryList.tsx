@@ -1,261 +1,306 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Fragment } from 'react';
 import { HackerNewsStory } from '../types/HackerNews';
 import { StorySummary } from './StorySummary';
-import { SummaryProvider, useSummary } from '../contexts/SummaryContext';
+import { SummaryProvider } from '../contexts/SummaryContext';
 import { extractHostname } from '../utils/urlUtils';
+import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
 /**
- * Props for the StoryList component
+ * @description Props for the StoryList component.
+ * Defines the expected properties for the StoryList.
  */
 interface StoryListProps {
-  /** Array of Hacker News stories to display */
+  /**
+   * @description Array of Hacker News stories to display.
+   * Each object in the array should conform to the HackerNewsStory interface.
+   */
   stories: HackerNewsStory[];
 }
 
 /**
- * Button component to expand or collapse all summaries 
- * Memoized to prevent unnecessary re-renders
- */
-const ExpandCollapseAllButton: React.FC = React.memo(() => {
-  // Get the summary context to control global expansion state
-  // Using the refactored context hook
-  const { expandAll, collapseAll, isAllExpanded } = useSummary();
-
-  // Determine the current collective state
-  const allCurrentlyExpanded = isAllExpanded();
-
-  // Define the click handler
-  const handleToggleClick = () => {
-    // If all are currently expanded, call collapseAll
-    if (allCurrentlyExpanded) {
-      // Collapse all summaries
-      collapseAll();
-    } else {
-      // Otherwise, expand all summaries
-      expandAll();
-    }
-  };
-
-  // Return the button element
-  return (
-    // Button element itself
-    <button
-      // Attach the click handler
-      onClick={handleToggleClick}
-      // Dynamic styling based on theme and interaction
-      className="text-gray-700 bg-gray-200 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-sm"
-    >
-      {/* Dynamically set button text based on the current collective state */}
-      {allCurrentlyExpanded ? 'Collapse All' : 'Expand All'}
-    </button>
-  );
-});
-
-/**
- * @description StoryList - A component that displays a list of Hacker News stories,
- * supporting both light (Hacker News style) and dark themes via Tailwind's dark: variant.
+ * @description StoryList component renders a feed of Hacker News stories.
+ * Each story is displayed using the StoryCard component.
+ * It includes error handling for invalid story data and wraps content in a SummaryProvider.
+ * @param {StoryListProps} props - The props for the component.
+ * @param {HackerNewsStory[]} [props.stories=[]] - An array of stories to render. Defaults to an empty array.
+ * @returns {JSX.Element} The rendered list of stories or an error message.
+ * @example
+ * const stories = fetchStories();
+ * return <StoryList stories={stories} />
+ * @remarks This component is responsible for the overall feed structure.
  */
 export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
-  // Check if stories is actually an array before trying to map
+  // Check if the received stories prop is actually an array.
   if (!Array.isArray(stories)) {
-    // Log an error if stories is not an array
+    // Log an error to the console if stories is not an array.
     console.error('StoryList expected stories to be an array, but received:', typeof stories, stories);
-    // Return null or an error message component to prevent the map error
+    // Return a user-friendly error message component.
     return <div className="text-red-500 p-4">Error: Invalid story data received.</div>;
   }
 
-  // Wrap the content with the SummaryProvider
+  // Return the main list structure.
   return (
+    // Provide summary context to child components (StoryCard -> StorySummary).
     <SummaryProvider>
+      {/* Container for the list, takes full width available. */}
       <div className="w-full">
-        <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
-          {/* Header area with attribution and expand/collapse button */}
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center">
-              <ExpandCollapseAllButton />
-            </div>
-            <div className="text-xs text-gray-500 dark:text-zinc-400 whitespace-nowrap">
-              {/* Fixed-width container to prevent layout shift when time updates */}
-              Summaries by <span className="font-bold">Gemini 2.5 Pro</span>
-            </div>
-          </div>
-
-          {/* Stories List Container */}
-          {/* Light mode: Transparent background (inherits page bg), no ring */}
-          {/* Dark mode: Dark background (darker than header), rounded corners, shadow, zinc ring */}
-          <div className="bg-transparent rounded-none dark:rounded-lg dark:shadow-md overflow-hidden ring-0 dark:ring-1 dark:ring-zinc-800">
-            {/* Unordered list to hold the individual story items */}
-            {/* Light mode divider: Light gray (gray-200) */}
-            {/* Dark mode divider: Darker zinc (zinc-800) */}
-            <ul className="divide-y divide-gray-200 dark:divide-zinc-800">
-              {/* Map over the stories array to render each story */}
-              {/* Now guaranteed to be an array due to the check above */}
-              {stories.map((story, index) => (
-                // List item for each story
-                <li
-                  // Unique key for React list rendering optimization
-                  key={story.id}
-                  // Flex container for layout, padding adjusted for responsiveness
-                  // Reduced padding compared to original for a tighter HN look
-                  className="flex flex-col py-2 px-1 sm:px-2"
-                >
-                  <div className="flex">
-                    {/* Story Rank */}
-                    {/* Light mode text: HN gray (#828282) */}
-                    {/* Dark mode text: Lighter zinc (zinc-500) */}
-                    {/* Adjusted width, padding, font weight, and alignment for HN style */}
-                    <span className="text-[#828282] dark:text-zinc-500 font-normal w-5 sm:w-6 text-right pr-1 sm:pr-1.5 pt-0.5 text-xs">
-                      {/* Display the rank (index + 1) followed by a period */}
-                      {index + 1}.
-                    </span>
-
-                    {/* Story Content container (takes remaining space) */}
-                    <div className="flex-1">
-                      {/* Story Title */}
-                      {/* Adjusted font size and bottom margin for HN look */}
-                      <h2 className="text-sm font-normal mb-0.5 leading-normal"> {/* HN uses normal weight for title */}
-                        {/* Check if the story has an external URL */}
-                        {story.url ? (
-                          // Use React Fragment to group adjacent elements without adding a DOM node
-                          <>
-                            {/* Story Link to external URL */}
-                            <a
-                              // The URL of the story
-                              href={story.url}
-                              // Light mode text: Near black, hover underline
-                              // Dark mode text: Light zinc (zinc-100), hover lighter zinc (zinc-300)
-                              // Added transition for smooth color change
-                              className="text-black dark:text-zinc-100 hover:underline dark:hover:text-zinc-300 transition-colors duration-150"
-                            >
-                              {/* The title text of the story */}
-                              {story.title}
-                            </a>
-
-                            {/* Extract and display hostname if URL is external and valid */}
-                            {/* Conditionally render the hostname span */}
-                            {extractHostname(story.url) && (
-                              // Hostname span
-                              // Light/Dark mode text: HN gray (#828282) / zinc-500
-                              // Reduced left margin for tighter spacing
-                              <span className="text-[#828282] dark:text-zinc-500 ml-1 text-xs">
-                                {/* Display hostname enclosed in parentheses */}
-                                ({extractHostname(story.url)})
-                              </span>
-                            )}
-                          </>
-                          // If story.url is null or empty (e.g., Ask HN)
-                        ) : (
-                          /* Link to HN comments page if no external URL */
-                          <a
-                            // Construct URL for the Hacker News item page using story ID
-                            href={`https://news.ycombinator.com/item?id=${story.id}`}
-                            // Light mode text: Near black, hover underline
-                            // Dark mode text: Light zinc (zinc-100), hover lighter zinc (zinc-300)
-                            // Added transition for smooth color change
-                            className="text-black dark:text-zinc-100 hover:underline dark:hover:text-zinc-300 transition-colors duration-150"
-                          >
-                            {/* The title text of the story */}
-                            {story.title}
-                          </a>
-                        )}
-                      </h2>
-
-                      {/* Story Metadata Container */}
-                      {/* Adjusted text size, gap, and default text color for HN style */}
-                      <div className="text-xs flex flex-wrap gap-x-2 items-center text-[#828282] dark:text-zinc-500">
-                        {/* Story Score */}
-                        {/* Removed score icon for closer HN resemblance */}
-                        {/* Dark mode text color adjusted */}
-                        <span className="flex items-center dark:text-emerald-500">
-                          {/* Score value */}
-                          {/* Dark mode font weight adjusted */}
-                          {/* Added " points" text for clarity */}
-                          <span className="font-normal">{story.score} points</span>
-                        </span>
-
-                        {/* Separator */}
-                        <span className="text-gray-400 dark:text-zinc-600">|</span>
-
-                        {/* Author Link Container */}
-                        <span className="flex items-center">
-                          {/* "by" prefix - removed as HN doesn't explicitly use "by" here */}
-                          {/* <span className="mr-1">by</span> */}
-                          {/* Link to the author's HN user page */}
-                          <a
-                            // Construct URL for the HN user page using author's username
-                            href={`https://news.ycombinator.com/user?id=${story.by}`}
-                            // Light mode text: HN gray (#828282), hover underline
-                            // Dark mode text: HN gray (zinc-500), hover light zinc (zinc-100)
-                            // Added transition for smooth color change
-                            className="text-[#828282] dark:text-zinc-500 hover:underline dark:hover:text-zinc-100 transition-colors duration-150"
-                          >
-                            {/* Author's username */}
-                            {story.by}
-                          </a>
-                        </span>
-
-                        {/* Separator */}
-                        <span className="text-gray-400 dark:text-zinc-600">|</span>
-
-                        {/* Story Time (if available) */}
-                        {/* Conditionally render the time */}
-                        {story.time && (
-                          // Regular span for time, removed hover:underline class
-                          <span className="text-[#828282] dark:text-zinc-500">
-                            {/* TODO: Implement relative time formatting (e.g., "X hours ago") like HN */}
-                            {/* Currently uses basic date formatting */}
-                            {new Date(story.time * 1000).toLocaleDateString('en-US', {
-                              // Short month name (e.g., "Apr")
-                              month: 'short',
-                              // Numeric day (e.g., "9")
-                              day: 'numeric',
-                              // Consider adding hour/minute formatting later for more precision
-                            })}
-                          </span>
-                        )}
-
-                        {/* Separator */}
-                        <span className="text-gray-400 dark:text-zinc-600">|</span>
-
-                        {/* Comments Link */}
-                        {/* Removed comments icon for closer HN resemblance */}
-                        <a
-                          // Construct URL for the HN item page using story ID
-                          href={`https://news.ycombinator.com/item?id=${story.id}`}
-                          // Light mode text: HN gray (#828282), hover underline
-                          // Dark mode text: HN gray (zinc-500), hover light zinc (zinc-100)
-                          // Added transition for smooth color change
-                          className="text-[#828282] dark:text-zinc-500 hover:underline dark:hover:text-zinc-100 transition-colors duration-150 flex items-center"
-                        >
-                          {/* Display number of comments, defaulting to 0 if undefined/null */}
-                          {/* Added " comments" text */}
-                          {story.descendants ?? 0} comments
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Summary Section */}
-                  {/* Display the StorySummary component if either summary is available */}
-                  {(story.story_summary || story.comments_summary || story.status) && (
-                    <div className="ml-5 sm:ml-6">
-                      <StorySummary
-                        storySummary={story.story_summary}
-                        commentsSummary={story.comments_summary}
-                        status={story.status}
-                        hasUrl={!!story.url}
-                        index={index}
-                        hnId={story.id}
-                      />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        {/* Map over the stories array to render each story card. */}
+        {stories.map((story, index) => (
+          // Render the StoryCard component for each story.
+          <StoryCard key={story.id} story={story} index={index} />
+        ))}
       </div>
     </SummaryProvider>
   );
-  // End of component return
+};
+
+/**
+ * Props for StoryCard component
+ */
+interface StoryCardProps {
+  story: HackerNewsStory;
+  index: number;
+}
+
+/**
+ * @description Renders an individual story card with its metadata and summary.
+ * Uses helper functions to format time and score, and potentially extracts a headline from the summary.
+ * @param {StoryCardProps} props - The props for the component.
+ * @param {HackerNewsStory} props.story - The Hacker News story data.
+ * @param {number} props.index - The rank/index of the story in the list (0-based).
+ * @returns {JSX.Element} The rendered story card.
+ * @example
+ * <StoryCard story={storyData} index={0} />
+ * @remarks Encapsulates the presentation logic for a single story item in the feed.
+ */
+const StoryCard: React.FC<StoryCardProps> = ({ story, index }) => {
+
+  /**
+   * @description Formats a Unix timestamp into a human-readable relative time string.
+   * Displays time as seconds (s), minutes (m), hours (h), days (d), or month/day for older posts.
+   * @param {number} timestamp - The Unix timestamp (in seconds) to format.
+   * @returns {string} The formatted relative time string (e.g., "5m", "2h", "3d", "Jan 15").
+   * @example
+   * const formatted = formatTime(1678886400); // Example timestamp
+   * console.log(formatted); // Output depends on current time, e.g., "Mar 15" or "2d"
+   */
+  const formatTime = (timestamp: number): string => {
+    // Get the current date and time.
+    const now = new Date();
+    // Convert the Unix timestamp (seconds) to milliseconds and create a Date object.
+    const postTime = new Date(timestamp * 1000);
+    // Calculate the difference in milliseconds between now and the post time.
+    const diffMs = now.getTime() - postTime.getTime();
+    // Convert the difference to seconds.
+    const diffSecs = Math.round(diffMs / 1000);
+    // Convert the difference to minutes.
+    const diffMins = Math.round(diffMs / 60000);
+    // Convert the difference to hours.
+    const diffHours = Math.round(diffMs / 3600000);
+    // Convert the difference to days.
+    const diffDays = Math.round(diffMs / 86400000);
+
+    // If the difference is less than 60 seconds, return in seconds.
+    if (diffSecs < 60) {
+      // Return formatted time string in seconds.
+      return `${diffSecs}s`;
+    }
+    // If the difference is less than 60 minutes, return in minutes.
+    if (diffMins < 60) {
+      // Return formatted time string in minutes.
+      return `${diffMins}m`;
+    }
+    // If the difference is less than 24 hours, return in hours.
+    if (diffHours < 24) {
+      // Return formatted time string in hours.
+      return `${diffHours}h`;
+    }
+    // If the difference is less than 7 days, return in days.
+    if (diffDays < 7) {
+      // Return formatted time string in days.
+      return `${diffDays}d`;
+    }
+    // Otherwise, return the date in 'Month Day' format (e.g., "Apr 10").
+    return postTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  /**
+   * @description Formats the story score into a string.
+   * Returns "0" if the score is undefined. Currently does not use abbreviations (K/M).
+   * @param {number | undefined} score - The score (number of upvotes) of the story.
+   * @returns {string} The formatted score as a string.
+   * @example
+   * const formattedScore = formatScore(123); // Returns "123"
+   * const formattedZero = formatScore(undefined); // Returns "0"
+   */
+  const formatScore = (score: number | undefined): string => {
+    // Convert the score to a string, defaulting to 0 if score is undefined.
+    return (score || 0).toString();
+  };
+
+  /**
+   * @description Attempts to extract the first H1 or H2 heading from a Markdown string.
+   * Looks for lines starting with '#' or '##' followed by space.
+   * @param {string | undefined} markdown - The Markdown content to parse.
+   * @returns {string | null} The text content of the first H1 or H2 heading found, or null if no heading is found or markdown is empty.
+   * @example
+   * const md = "# Main Title\\nSome text\\n## Subheading";
+   * const heading = extractFirstMarkdownHeading(md); // Returns "Main Title"
+   * const noHeading = extractFirstMarkdownHeading("Just text."); // Returns null
+   */
+  const extractFirstMarkdownHeading = (markdown?: string): string | null => {
+    // If markdown is null, undefined, or empty, return null immediately.
+    if (!markdown) {
+      // Return null as no markdown content was provided.
+      return null;
+    }
+    // Define the regex to match lines starting with optional whitespace, then '#' or '##' followed by required space,
+    // capturing the heading text until the end of line or newline.
+    // It looks for the start of a line (^), optional whitespace (\s*), then '#' or '##' (?:#|##),
+    // then required whitespace (\s+), then captures one or more characters (.+?) until the end of the line ($) or a newline (\n).
+    // The 'm' flag enables multiline matching.
+    const match = markdown.match(/^\s*(?:#|##)\s+(.+?)($|\n)/m);
+    // Check if a match was found.
+    // If match is not null and has a captured group (match[1]), trim whitespace and return it. Otherwise, return null.
+    return match ? match[1].trim() : null;
+  };
+
+  // Attempt to extract the first H1/H2 heading from the story summary.
+  // Fall back to the original story title if no heading is found in the summary.
+  const displayHeadline = extractFirstMarkdownHeading(story.story_summary) || story.title;
+
+  // --- Prepare Metadata Items ---
+  // Create an array to hold metadata elements that should be rendered.
+  const metadataItems = [];
+
+  // Add Score item (always present).
+  metadataItems.push(
+    <span className="flex items-center" key="score">
+      {/* Upvote icon (chevron-up SVG). */}
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="mr-0 w-3 h-3 text-green-600">
+        <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06 0L10 9.06l-3.71 3.71a.75.75 0 01-1.06-1.06l4.25-4.25a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06z" clipRule="evenodd" />
+      </svg>
+      {/* Display the formatted score with green text. */}
+      <span className="font-medium text-green-600">{formatScore(story.score)}</span>
+    </span>
+  );
+
+  // Add Author item (always present).
+  metadataItems.push(
+    <span key="author">
+      <a
+        href={`https://news.ycombinator.com/user?id=${story.by}`}
+        className="text-gray-600 hover:text-blue-700 transition-colors duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {story.by}
+      </a>
+    </span>
+  );
+
+  // Add Time item (always present, assuming story.time exists).
+  metadataItems.push(
+    <span key="time">
+      {story.time ? formatTime(story.time) : ''}
+    </span>
+  );
+
+  // Conditionally add Hostname item.
+  const hostname = story.url ? extractHostname(story.url) : null;
+  if (hostname) {
+    metadataItems.push(
+      <span className="text-gray-500" key="hostname">{hostname}</span>
+    );
+  }
+
+  // Conditionally add Comments link item.
+  if (typeof story.descendants === 'number') {
+    metadataItems.push(
+      <a
+        href={`https://news.ycombinator.com/item?id=${story.id}`}
+        className="flex items-center text-gray-600 hover:text-blue-700 transition-colors duration-150"
+        onClick={(e) => e.stopPropagation()}
+        key="comments"
+      >
+        {/* Display the count followed by the word "comments". Add a non-breaking space. */}
+        {story.descendants}&nbsp;comments
+      </a>
+    );
+  }
+  // --- End Prepare Metadata Items ---
+
+  // Return the JSX structure for the story card.
+  return (
+    // Article container for the story card with styling.
+    <article className="px-4 py-4 mb-3 rounded-lg border border-gray-200 group">
+      {/* Flex container for layout (rank + content). */}
+      <div className="flex items-start space-x-3">
+        {/* Container for the story rank number. */}
+        <div className="w-6 text-right">
+          {/* Display the rank (index + 1) with styling. */}
+          <span className="text-sm text-gray-500">{index + 1}.</span>
+        </div>
+
+        {/* Main content area for the story details. */}
+        <div className="flex-1 min-w-0">
+          {/* Story title/headline section. Reverted to simple state. */}
+          <h2 className="text-lg text-black font-semibold mb-1 leading-snug">
+            {/* Anchor tag linking to the story URL or the HN item page. */}
+            <a
+              // Use story URL if available, otherwise link to HN comments page.
+              href={story.url || `https://news.ycombinator.com/item?id=${story.id}`}
+              // Remove target="_blank" and rel attributes to open in current tab.
+              // Apply underline on hover. Removed truncation classes.
+              className="hover:underline"
+              // Prevent click event from bubbling up to the article container.
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Display the determined headline (either from summary or original title). */}
+              {displayHeadline}
+            </a>
+            {/* Domain removed from here */}
+          </h2>
+
+          {/* Metadata section - Render items joined by pipes */}
+          <div className="flex items-center text-sm text-gray-600 flex-wrap gap-x-3 mb-2">
+            {/* Map over the visible metadata items. */}
+            {metadataItems.map((item, index) => (
+              // Use Fragment to handle key prop and conditional separator.
+              <Fragment key={index}>
+                {/* Render the metadata item itself. */}
+                {item}
+                {/* Render the pipe separator if it's not the last item. */}
+                {index < metadataItems.length - 1 && (
+                  <span className="text-gray-400">|</span>
+                )}
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Conditionally render the summary section. */}
+          {/* Render this block if there is a story summary, comments summary, or a status. */}
+          {(story.story_summary || story.comments_summary || story.status) && (
+            // Container for the StorySummary component with slight top margin.
+            <div className="mt-1">
+              {/* Render the StorySummary component, passing relevant props. */}
+              <StorySummary
+                // Pass the story summary content.
+                storySummary={story.story_summary}
+                // Pass the comments summary content.
+                commentsSummary={story.comments_summary}
+                // Pass the status of the summary generation.
+                status={story.status}
+                // Pass a boolean indicating if the story has an external URL.
+                hasUrl={!!story.url}
+                // Pass the index of the story.
+                index={index}
+                // Pass the Hacker News ID of the story.
+                hnId={story.id}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
 }; 
