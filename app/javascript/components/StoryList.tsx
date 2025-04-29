@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, Fragment } from 'reac
 import { HackerNewsStory } from '../types/HackerNews';
 import { StorySummary } from './StorySummary';
 import { SummaryProvider } from '../contexts/SummaryContext';
-import { extractHostname } from '../utils/urlUtils';
+import { StoryMetadata } from './StoryMetadata';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -58,13 +58,16 @@ export const StoryList: React.FC<StoryListProps> = ({ stories = [] }) => {
  * Props for StoryCard component
  */
 interface StoryCardProps {
+  /** @description The Hacker News story data object. */
   story: HackerNewsStory;
+  /** @description The rank/index of the story in the list (0-based). */
   index: number;
 }
 
 /**
  * @description Renders an individual story card with its metadata and summary.
  * Uses helper functions to format time and score, and potentially extracts a headline from the summary.
+ * Metadata display is now delegated to the StoryMetadata component.
  * @param {StoryCardProps} props - The props for the component.
  * @param {HackerNewsStory} props.story - The Hacker News story data.
  * @param {number} props.index - The rank/index of the story in the list (0-based).
@@ -76,69 +79,6 @@ interface StoryCardProps {
 const StoryCard: React.FC<StoryCardProps> = ({ story, index }) => {
 
   /**
-   * @description Formats a Unix timestamp into a human-readable relative time string.
-   * Displays time as seconds (s), minutes (m), hours (h), days (d), or month/day for older posts.
-   * @param {number} timestamp - The Unix timestamp (in seconds) to format.
-   * @returns {string} The formatted relative time string (e.g., "5m", "2h", "3d", "Jan 15").
-   * @example
-   * const formatted = formatTime(1678886400); // Example timestamp
-   * console.log(formatted); // Output depends on current time, e.g., "Mar 15" or "2d"
-   */
-  const formatTime = (timestamp: number): string => {
-    // Get the current date and time.
-    const now = new Date();
-    // Convert the Unix timestamp (seconds) to milliseconds and create a Date object.
-    const postTime = new Date(timestamp * 1000);
-    // Calculate the difference in milliseconds between now and the post time.
-    const diffMs = now.getTime() - postTime.getTime();
-    // Convert the difference to seconds.
-    const diffSecs = Math.round(diffMs / 1000);
-    // Convert the difference to minutes.
-    const diffMins = Math.round(diffMs / 60000);
-    // Convert the difference to hours.
-    const diffHours = Math.round(diffMs / 3600000);
-    // Convert the difference to days.
-    const diffDays = Math.round(diffMs / 86400000);
-
-    // If the difference is less than 60 seconds, return in seconds.
-    if (diffSecs < 60) {
-      // Return formatted time string in seconds.
-      return `${diffSecs}s`;
-    }
-    // If the difference is less than 60 minutes, return in minutes.
-    if (diffMins < 60) {
-      // Return formatted time string in minutes.
-      return `${diffMins}m`;
-    }
-    // If the difference is less than 24 hours, return in hours.
-    if (diffHours < 24) {
-      // Return formatted time string in hours.
-      return `${diffHours}h`;
-    }
-    // If the difference is less than 7 days, return in days.
-    if (diffDays < 7) {
-      // Return formatted time string in days.
-      return `${diffDays}d`;
-    }
-    // Otherwise, return the date in 'Month Day' format (e.g., "Apr 10").
-    return postTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  /**
-   * @description Formats the story score into a string.
-   * Returns "0" if the score is undefined. Currently does not use abbreviations (K/M).
-   * @param {number | undefined} score - The score (number of upvotes) of the story.
-   * @returns {string} The formatted score as a string.
-   * @example
-   * const formattedScore = formatScore(123); // Returns "123"
-   * const formattedZero = formatScore(undefined); // Returns "0"
-   */
-  const formatScore = (score: number | undefined): string => {
-    // Convert the score to a string, defaulting to 0 if score is undefined.
-    return (score || 0).toString();
-  };
-
-  /**
    * @description Attempts to extract the first H1 or H2 heading from a Markdown string.
    * Looks for lines starting with '#' or '##' followed by space.
    * @param {string | undefined} markdown - The Markdown content to parse.
@@ -148,134 +88,70 @@ const StoryCard: React.FC<StoryCardProps> = ({ story, index }) => {
    * const heading = extractFirstMarkdownHeading(md); // Returns "Main Title"
    * const noHeading = extractFirstMarkdownHeading("Just text."); // Returns null
    */
-  const extractFirstMarkdownHeading = (markdown?: string): string | null => {
-    // If markdown is null, undefined, or empty, return null immediately.
+  const extractFirstMarkdownHeading = (markdown?: string): string | undefined => {
+    // If markdown is null, undefined, or empty, return undefined immediately.
     if (!markdown) {
-      // Return null as no markdown content was provided.
-      return null;
+      // Return undefined as no markdown content was provided.
+      return undefined;
     }
     // Define the regex to match lines starting with optional whitespace, then '#' or '##' followed by required space,
     // capturing the heading text until the end of line or newline.
-    // It looks for the start of a line (^), optional whitespace (\s*), then '#' or '##' (?:#|##),
-    // then required whitespace (\s+), then captures one or more characters (.+?) until the end of the line ($) or a newline (\n).
-    // The 'm' flag enables multiline matching.
     const match = markdown.match(/^\s*(?:#|##)\s+(.+?)($|\n)/m);
     // Check if a match was found.
-    // If match is not null and has a captured group (match[1]), trim whitespace and return it. Otherwise, return null.
-    return match ? match[1].trim() : null;
+    // If match is not null and has a captured group (match[1]), trim whitespace and return it.
+    // Otherwise, return undefined.
+    return match ? match[1].trim() : undefined;
   };
 
   // Attempt to extract the first H1/H2 heading from the story summary.
   // Fall back to the original story title if no heading is found in the summary.
-  const displayHeadline = extractFirstMarkdownHeading(story.story_summary) || story.title;
-
-  // --- Prepare Metadata Items ---
-  // Create an array to hold metadata elements that should be rendered.
-  const metadataItems = [];
-
-  // Add Score item (always present).
-  metadataItems.push(
-    <span className="flex items-center" key="score">
-      {/* Upvote icon (chevron-up SVG). */}
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="mr-0 w-3 h-3 text-green-600">
-        <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06 0L10 9.06l-3.71 3.71a.75.75 0 01-1.06-1.06l4.25-4.25a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06z" clipRule="evenodd" />
-      </svg>
-      {/* Display the formatted score with green text. */}
-      <span className="font-medium text-green-600">{formatScore(story.score)}</span>
-    </span>
-  );
-
-  // Add Author item (always present).
-  metadataItems.push(
-    <span key="author">
-      <a
-        href={`https://news.ycombinator.com/user?id=${story.by}`}
-        className="text-gray-600 hover:text-blue-700 transition-colors duration-150"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {story.by}
-      </a>
-    </span>
-  );
-
-  // Add Time item (always present, assuming story.time exists).
-  metadataItems.push(
-    <span key="time">
-      {story.time ? formatTime(story.time) : ''}
-    </span>
-  );
-
-  // Conditionally add Hostname item.
-  const hostname = story.url ? extractHostname(story.url) : null;
-  if (hostname) {
-    metadataItems.push(
-      <span className="text-gray-500" key="hostname">{hostname}</span>
-    );
-  }
-
-  // Conditionally add Comments link item.
-  if (typeof story.descendants === 'number') {
-    metadataItems.push(
-      <a
-        href={`https://news.ycombinator.com/item?id=${story.id}`}
-        className="flex items-center text-gray-600 hover:text-blue-700 transition-colors duration-150"
-        onClick={(e) => e.stopPropagation()}
-        key="comments"
-      >
-        {/* Display the count followed by the word "comments". Add a non-breaking space. */}
-        {story.descendants}&nbsp;comments
-      </a>
-    );
-  }
-  // --- End Prepare Metadata Items ---
+  // Use nullish coalescing for a concise fallback.
+  const displayHeadline: string = extractFirstMarkdownHeading(story.story_summary) ?? story.title ?? '[Untitled Story]';
 
   // Return the JSX structure for the story card.
   return (
     // Article container for the story card with styling.
-    <article className="px-4 py-4 mb-3 rounded-lg border border-gray-200 group">
+    <article className="px-4 py-4 mb-3 rounded-lg border border-gray-200 dark:border-zinc-700 group">
       {/* Flex container for layout (rank + content). */}
       <div className="flex items-start space-x-3">
         {/* Container for the story rank number. */}
         <div className="w-6 text-right">
           {/* Display the rank (index + 1) with styling. */}
-          <span className="text-sm text-gray-500">{index + 1}.</span>
+          <span className="text-sm text-gray-500 dark:text-zinc-500">{index + 1}.</span>
         </div>
 
         {/* Main content area for the story details. */}
         <div className="flex-1 min-w-0">
-          {/* Story title/headline section. Reverted to simple state. */}
-          <h2 className="text-lg text-black font-semibold mb-1 leading-snug">
+          {/* Story title/headline section. */}
+          {/* Contains the main link to the story or HN page. */}
+          <h2 className="text-lg text-black dark:text-zinc-100 font-semibold mb-1 leading-snug">
             {/* Anchor tag linking to the story URL or the HN item page. */}
             <a
               // Use story URL if available, otherwise link to HN comments page.
               href={story.url || `https://news.ycombinator.com/item?id=${story.id}`}
-              // Remove target="_blank" and rel attributes to open in current tab.
-              // Apply underline on hover. Removed truncation classes.
-              className="hover:underline"
+              // Apply hover effect.
+              // Updated dark mode hover color.
+              className="hover:underline dark:hover:text-zinc-300 transition-colors duration-150"
               // Prevent click event from bubbling up to the article container.
               onClick={(e) => e.stopPropagation()}
+              target="_blank" // Keep target blank for external links
+              rel="noopener noreferrer"
             >
               {/* Display the determined headline (either from summary or original title). */}
               {displayHeadline}
             </a>
-            {/* Domain removed from here */}
           </h2>
 
-          {/* Metadata section - Render items joined by pipes */}
-          <div className="flex items-center text-sm text-gray-600 flex-wrap gap-x-3 mb-2">
-            {/* Map over the visible metadata items. */}
-            {metadataItems.map((item, index) => (
-              // Use Fragment to handle key prop and conditional separator.
-              <Fragment key={index}>
-                {/* Render the metadata item itself. */}
-                {item}
-                {/* Render the pipe separator if it's not the last item. */}
-                {index < metadataItems.length - 1 && (
-                  <span className="text-gray-400">|</span>
-                )}
-              </Fragment>
-            ))}
-          </div>
+          {/* Use the reusable StoryMetadata component */}
+          {/* Pass all necessary props derived from the story object. */}
+          <StoryMetadata
+            storyId={story.id}
+            score={story.score}
+            author={story.by}
+            time={story.time}
+            commentCount={story.descendants}
+            url={story.url}
+          />
 
           {/* Conditionally render the summary section. */}
           {/* Render this block if there is a story summary, comments summary, or a status. */}

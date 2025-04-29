@@ -267,18 +267,26 @@ class Ai::HnStorySummarizer
   # Create prompts for Stage 1: Technical content extraction
   # @return [Array<String>] [system_prompt, user_prompt]
   def create_extraction_prompts
+    instructions = <<~INSTRUCTIONS
+      Using the article's content as your ground truth, I'd like you to provide a detailed overview in Markdown that:
+
+      1. Includes key technical concepts, approaches and methodologies
+      2. Reproduces interesting/important quotes or excerpts from the article **verbatim**
+      3. Includes mentioned or cited URLs **verbatim**
+      4. Includes important data points, numbers, and statistics **verbatim**
+      5. Captures interesting technical specs, parameters, and benchmarks exactly as they appear
+      6. Includes any high-value code examples exactly as they appear
+      7. Preserves any algorithm details, architectural decisions, and design patterns mentioned
+      8. Highlights trade-offs, limitations, and technical challenges mentioned
+      9. Uses simple, understandable, blunt language, avoiding unnecessarily large words
+    INSTRUCTIONS
+
     # System prompt instructs the model on the extraction task
     system_prompt = <<~SYSTEM
-      You are an expert at accessing URLs and creating comprehensive technical summaries for developer audiences.
+      You are an expert at accessing URLs and creating comprehensive technical summaries for a software developer
+      audience.
 
-      When given a URL, your task is to:
-
-      1. Access the URL and read the entire article
-      2. Create an exhaustive technical summary in Markdown that captures ALL important information
-      3. Include verbatim quotes of key points, maintaining their exact wording
-      4. Preserve all technical details, data points, numbers, and statistics
-      5. Include any code snippets exactly as they appear, and format them as valid Markdown code blocks
-      6. Capture methodologies, algorithms, and technical approaches described
+      #{instructions}
 
       Your summary should be thorough and comprehensive, not missing any significant technical information.
       It should be written for a demanding technical audience of skeptical software developers and engineers.
@@ -290,17 +298,7 @@ class Ai::HnStorySummarizer
 
       This article was posted on Hacker News with the title: "#{story['title']}"
 
-      I'd like you to provide a detailed overview in Markdown that:
-
-      1. Includes key technical concepts, approaches and methodologies
-      2. Reproduces interesting/important quotes or excerpts from the article **verbatim**
-      3. Includes mentioned or cited URLs **verbatim**
-      4. Includes important data points, numbers, and statistics **verbatim**
-      5. Captures interesting technical specs, parameters, and benchmarks exactly as they appear
-      6. Includes any high-value code examples exactly as they appear
-      7. Preserves any algorithm details, architectural decisions, and design patterns mentioned
-      8. Highlights trade-offs, limitations, and technical challenges mentioned
-      9. Uses simple, understandable, blunt language, avoiding unnecessarily large words
+      #{instructions}
 
       If the article includes code snippets or code samples, and you choose to include them in your overview (which is
       encouraged), reproduce them **verbatim** in Markdown code blocks. Do not modify them in any way.

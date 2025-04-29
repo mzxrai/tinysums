@@ -470,7 +470,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
                 className="flex items-center text-xs text-gray-500 hover:text-blue-700 transition-colors duration-150 cursor-pointer"
               >
                 {/* Dynamically set button text based on expansion state. */}
-                {currentExpandedState ? 'Show less' : 'Show full'}
+                {currentExpandedState ? 'Show less' : 'Show more'}
                 {/* Chevron icon indicating expansion/collapse action. */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 ml-0 transition-transform ${currentExpandedState ? 'rotate-180' : ''}`}>
                   {/* SVG path data for the chevron icon. */}

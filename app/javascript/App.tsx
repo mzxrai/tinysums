@@ -7,9 +7,12 @@ import { CompaniesPage } from './pages/companies/CompaniesPage';
 // Import the StoryPage for permalink functionality
 import { StoryPage } from './pages/StoryPage';
 // Import the ClickCounter for now, might be moved later
+// TODO: Decide if ClickCounter should be part of the layout or placed elsewhere
 import { ClickCounter } from './components/ClickCounter';
 // Import TanStack Query components
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+// Import the new layout component
+import { AppLayout } from './components/layout/AppLayout';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -23,9 +26,8 @@ const queryClient = new QueryClient({
 
 /**
  * @description The main application component.
- * Sets up the overall layout structure, 
- * and renders the main page content using React Router.
- * Routes are configured here to enable direct URL navigation.
+ * Sets up TanStack Query, routing, and the overall application layout.
+ * Uses AppLayout to provide a consistent header across all routes.
  */
 const App: React.FC = () => {
   // Return the main application structure
@@ -34,27 +36,28 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       {/* Use BrowserRouter for client-side routing */}
       <BrowserRouter>
-        {/* Main content area */}
-        <main>
+        {/* Use AppLayout to wrap all routes, providing the header and base structure */}
+        <AppLayout>
           {/* Define the routes for the application */}
+          {/* These routes will be rendered as children of AppLayout's <main> tag */}
           <Routes>
             {/* Home route */}
+            {/* Renders the list of stories */}
             <Route path="/" element={<HomePage />} />
-            {/* Story permalink route - for direct linking to summaries */}
+            {/* Story permalink route */}
+            {/* Renders a single story's detail page */}
             <Route path="/story/:id" element={<StoryPage />} />
             {/* Companies route */}
+            {/* Renders the companies page */}
             <Route path="/companies" element={<CompaniesPage />} />
             {/* Legacy route for backwards compatibility */}
+            {/* Redirects /hacker_news to the root path */}
             <Route path="/hacker_news" element={<Navigate to="/" replace />} />
-            {/* Add additional routes here as needed, e.g.: */}
-            {/* <Route path="/company/:id" element={<CompanyDetailPage />} /> */}
             {/* Default redirect for unmatched routes */}
+            {/* Sends users back to the home page if the path is not recognized */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </main>
-        {/* Render the ClickCounter globally at the bottom */}
-        {/* This might be moved or removed depending on future requirements */}
-        <ClickCounter />
+        </AppLayout>
       </BrowserRouter>
     </QueryClientProvider>
   );
