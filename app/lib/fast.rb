@@ -30,11 +30,11 @@ module Fast
     # Configures and initializes the Rails cache with Redis
     # @return [ActiveSupport::Cache::RedisCacheStore] The initialized cache store
     def setup_cache
-      # Configure the cache store based on environment
-      Rails.application.config.cache_store = :redis_cache_store, cache_config
+      # # Configure the cache store based on environment
+      # Rails.application.config.cache_store = :redis_cache_store, cache_config
 
-      # Initialize the cache with our configuration
-      Rails.cache = ActiveSupport::Cache.lookup_store(Rails.application.config.cache_store)
+      # # Initialize the cache with our configuration
+      # Rails.cache = ActiveSupport::Cache.lookup_store(Rails.application.config.cache_store)
     end
 
     private
