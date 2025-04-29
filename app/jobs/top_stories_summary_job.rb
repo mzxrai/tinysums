@@ -25,6 +25,8 @@ class TopStoriesSummaryJob
   # Entry point that orchestrates the entire process
   # @return [void]
   def perform
+    logger.info("Starting job execution")
+
     # Step 1: Fetch and update stories from the HN API
     # This ensures we have the latest stories and rankings
     update_stories_database
@@ -39,12 +41,18 @@ class TopStoriesSummaryJob
 
   private
 
+  # Get a logger tagged with the job name
+  # @return [Logger] A logger instance tagged with the job name
+  def logger
+    @logger ||= Rails.logger.tagged("TopStoriesSummaryJob")
+  end
+
   # Fetch top stories from HN API and update the database
   # This master method coordinates the entire story update process
   # @return [void]
   def update_stories_database
     # Log that we're starting to fetch stories
-    Rails.logger.info("Fetching top stories from HN API")
+    logger.info("Fetching top stories from HN API")
 
     # Fetch top stories from the HN API
     top_stories = fetch_top_stories
@@ -56,7 +64,7 @@ class TopStoriesSummaryJob
     mark_inactive_stories(current_top_ids)
 
     # Log the count of active stories for monitoring
-    Rails.logger.info("Updated #{Story.active.count} active stories in the database")
+    logger.info("Updated #{Story.active.count} active stories in the database")
   end
 
   # Fetch the top stories from the HN API
@@ -146,20 +154,16 @@ class TopStoriesSummaryJob
     # Log counts for monitoring and debugging
     log_summary_counts(content_summaries_needed, comments_summaries_needed)
 
-    # Get a common adapter to use for all summaries
-    # Using the same adapter for all summaries improves consistency
-    adapter = Ai::AdapterFactory.default_summary_adapter
-
     # Process story content summaries in batches
     # Batching with jitter prevents overwhelming the AI service
     process_in_batches(content_summaries_needed) do |story|
-      generate_story_summary(story, adapter)
+      generate_story_summary(story)
     end
 
     # Process comments summaries in batches
     # Comments often require more processing power from the AI
     process_in_batches(comments_summaries_needed) do |story|
-      generate_comments_summary(story, adapter)
+      generate_comments_summary(story)
     end
   end
 
@@ -176,7 +180,7 @@ class TopStoriesSummaryJob
     # Maximum number of concurrent threads to use
     # This controls how many API calls we make in parallel
     # Adjust based on API rate limits and server capacity
-    max_threads = 5
+    max_threads = 1
 
     # Divide the items into smaller batches of BATCH_SIZE
     # Each batch will be processed with concurrent threads
@@ -227,11 +231,11 @@ class TopStoriesSummaryJob
   # @return [void]
   def log_summary_counts(content_stories, comment_stories)
     # Log count of stories needing content summaries
-    Rails.logger.info(
+    logger.info(
       "Found #{content_stories.size} stories needing content summaries"
     )
     # Log count of stories needing comment summaries
-    Rails.logger.info(
+    logger.info(
       "Found #{comment_stories.size} stories for comment summary regeneration"
     )
   end
@@ -242,42 +246,48 @@ class TopStoriesSummaryJob
   # 2. Generates the summary content
   # 3. Saves the result and handles errors
   # @param story [Story] the story to summarize
-  # @param adapter [Ai::BaseAiAdapter] the AI adapter to use
   # @return [void]
-  def generate_story_summary(story, adapter)
+  def generate_story_summary(story)
+    # Create a story-specific logger derived from the job logger
+    story_logger = logger.tagged("Story ##{story.hn_id}")
+
     # Log that we're starting to generate a summary for monitoring
-    Rails.logger.info("Generating content summary for story ##{story.hn_id}")
+    story_logger.info("Generating content summary")
 
     # Create a new summary record if one doesn't exist
     # This ensures we have a record to update even if generation fails
     summary = story.story_summary || story.create_story_summary
 
     begin
-      # Generate the summary content using the AI adapter
-      content = generate_content_summary(story, adapter)
+      # Generate the summary content using the story logger
+      content = generate_content_summary(story, story_logger)
 
       # Save the summary to the database and log the result
       save_summary(summary, content, "content", story.hn_id)
-      # rescue => e
-      #   # Log any errors that occur during generation
-      #   # This helps with debugging AI-related issues
-      #   log_generation_error("content", story.hn_id, e)
+    rescue => e
+      # Log any errors that occur during generation
+      # This helps with debugging AI-related issues
+      log_generation_error("content", story.hn_id, e)
     end
   end
 
   # Generate the actual content summary using the AI
   # Separated from the main method to keep methods small and focused
   # @param story [Story] the story to summarize
-  # @param adapter [Ai::BaseAiAdapter] the AI adapter to use
+  # @param story_logger [Logger] logger tagged with story information
   # @return [String] the generated summary
-  def generate_content_summary(story, adapter)
-    # Create a summarizer with extraction and summary adapters
-    # The extraction adapter helps fetch and parse the article content
+  def generate_content_summary(story, story_logger)
+    # Log the content generation attempt
+    story_logger.info("Starting content extraction and summarization")
+
+    # Create a summarizer with appropriate adapters and pass the story logger
     summarizer = Ai::HnStorySummarizer.new(
-      Ai::AdapterFactory.default_extraction_adapter,
-      adapter,
-      adapter,
-      story.hn_id
+      Ai::AdapterFactory.default_extraction_adapter(logger: story_logger),
+      Ai::AdapterFactory.default_summary_adapter(logger: story_logger),
+      Ai::AdapterFactory.default_classification_adapter(logger: story_logger),
+      story.hn_id,
+      {}, # Default options
+      story_logger # Pass the story-specific logger
     )
 
     # Generate and return the summary
@@ -291,19 +301,21 @@ class TopStoriesSummaryJob
   # 2. Generates the summary content
   # 3. Saves the result and handles errors
   # @param story [Story] the story to summarize comments for
-  # @param adapter [Ai::BaseAiAdapter] the AI adapter to use
   # @return [void]
-  def generate_comments_summary(story, adapter)
+  def generate_comments_summary(story)
+    # Create a story-specific logger derived from the job logger
+    story_logger = logger.tagged("Story ##{story.hn_id}")
+
     # Log that we're starting to generate a comments summary
-    Rails.logger.info("Generating comments summary for story ##{story.hn_id}")
+    story_logger.info("Generating comments summary")
 
     # Create a new summary record if one doesn't exist
     # This ensures we have a record to update even if generation fails
     summary = story.comments_summary || story.create_comments_summary
 
     begin
-      # Generate the comment thread summary using the AI adapter
-      content = generate_thread_summary(story, adapter)
+      # Generate the comment thread summary using the AI adapter and story logger
+      content = generate_thread_summary(story, story_logger)
 
       # Save the summary to the database and log the result
       save_summary(summary, content, "comments", story.hn_id)
@@ -317,12 +329,20 @@ class TopStoriesSummaryJob
   # Generate the actual thread summary using the AI
   # Separated from the main method to keep methods small and focused
   # @param story [Story] the story to summarize
-  # @param adapter [Ai::BaseAiAdapter] the AI adapter to use
+  # @param story_logger [Logger] logger tagged with story information
   # @return [String] the generated summary
-  def generate_thread_summary(story, adapter)
-    # Create a thread summarizer with the adapter
+  def generate_thread_summary(story, story_logger)
+    # Log the thread summary generation attempt
+    story_logger.info("Starting thread summary generation")
+
+    # Create a thread summarizer with the adapter and story logger
     # This specializes in summarizing comment threads
-    summarizer = Ai::HnThreadSummarizer.new(adapter, story.hn_id)
+    summarizer = Ai::HnThreadSummarizer.new(
+      Ai::AdapterFactory.default_summary_adapter(logger: story_logger),
+      story.hn_id,
+      {}, # Default options
+      story_logger # Pass the story-specific logger
+    )
 
     # Generate and return the summary of all comments
     # The summarizer handles fetching comments and AI interaction
@@ -344,11 +364,11 @@ class TopStoriesSummaryJob
       summary.update(content: content)
 
       # Log success for monitoring
-      Rails.logger.info("Saved #{type} summary for story ##{story_id}")
+      logger.info("Saved #{type} summary for story ##{story_id}")
     else
       # Log warning if we received empty content
       # This indicates a potential issue with the AI or the content
-      Rails.logger.warn("Generated empty #{type} summary for story ##{story_id}")
+      logger.warn("Generated empty #{type} summary for story ##{story_id}")
     end
   end
 
@@ -361,7 +381,7 @@ class TopStoriesSummaryJob
   def log_generation_error(type, story_id, error)
     # Log the error with context information
     # This helps with diagnosing issues in the AI or extraction process
-    Rails.logger.error(
+    logger.error(
       "Error generating #{type} summary for story ##{story_id}: #{error.message}"
     )
   end
@@ -387,7 +407,7 @@ class TopStoriesSummaryJob
       .count
 
     # Log completion status with counts for monitoring
-    Rails.logger.info("TopStoriesSummaryJob completed")
-    Rails.logger.info("#{active_stories} active stories: #{stories_with_content} with content summaries, #{stories_with_comments} with comment summaries")
+    logger.info("TopStoriesSummaryJob completed")
+    logger.info("#{active_stories} active stories: #{stories_with_content} with content summaries, #{stories_with_comments} with comment summaries")
   end
 end

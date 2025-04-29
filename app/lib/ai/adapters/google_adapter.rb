@@ -31,6 +31,24 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
     end
   end
 
+  # Executes a completion request requiring structured JSON output conforming to a schema.
+  # Implements the base adapter method for Google's Gemini API.
+  #
+  # @param system_prompt [String] The system prompt for the AI.
+  # @param user_prompt [String] The user prompt for the AI.
+  # @param json_schema [Hash] The JSON schema the response must conform to.
+  # @return [String] The raw JSON string response from the AI.
+  # @raise [StandardError] If the API call itself fails.
+  def complete_with_json_schema(system_prompt, user_prompt, json_schema)
+    # Log the specific type of API call being made.
+    logger.info("Calling Google Gemini API for structured JSON completion: #{options[:model]}")
+
+    # Delegate to the private API call method, passing the schema.
+    # Pass schema for structured output handling within call_api (or a new dedicated private method).
+    # Note: This might require refactoring call_api or adding a new private method.
+    call_api(system_prompt, user_prompt, json_schema: json_schema)
+  end
+
   private
 
   # Get the API key from environment variables
@@ -42,9 +60,23 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
   # Call the Google Gemini API using Faraday
   # @param system_prompt [String] The system prompt to send to the API
   # @param user_prompt [String] The user prompt to send to the API
-  # @return [String] The generated text
+  # @param json_schema [Hash, nil] Optional JSON schema for structured output.
+  # @return [String] The generated text (or JSON string if schema provided)
   # @raise [StandardError] If the API call fails
-  def call_api(system_prompt, user_prompt)
+  def call_api(system_prompt, user_prompt, json_schema: nil)
+    # Base generation config with max tokens.
+    generation_config = {
+      max_output_tokens: options[:max_tokens]
+    }
+
+    # If a JSON schema is provided, configure for structured JSON output.
+    if json_schema.present?
+      # Set the response MIME type to JSON.
+      generation_config[:response_mime_type] = "application/json"
+      # Include the provided schema.
+      generation_config[:response_schema] = json_schema
+    end
+
     # Prepare the API request payload
     payload = {
       contents: [
@@ -55,9 +87,8 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
           ]
         }
       ],
-      generation_config: {
-        max_output_tokens: options[:max_tokens]
-      }
+      # Include the potentially modified generation config.
+      generation_config: generation_config
     }
 
     # Add system instruction if provided
@@ -110,12 +141,12 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
       else
         # Handle API error - raise an exception instead of returning an error message
         error_message = response.body["error"]["message"] rescue "Unknown error (HTTP #{response.status})"
-        Rails.logger.error("Google Gemini API Error: #{error_message}")
+        logger.error("Google Gemini API Error: #{error_message}")
         raise StandardError, "Google Gemini API Error: #{error_message}"
       end
     rescue StandardError => e
       # Log the error and re-raise it
-      Rails.logger.error("Google Gemini API Request Error: #{e.message}")
+      logger.error("Google Gemini API Request Error: #{e.message}")
       raise
     end
   end

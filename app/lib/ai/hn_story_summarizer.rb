@@ -53,7 +53,7 @@ class Ai::HnStorySummarizer
   }.freeze
 
   # Define attribute readers/accessors for instance variables
-  attr_reader :extraction_adapter, :summary_adapter, :extraction_classifier_adapter, :hn_client, :options, :story
+  attr_reader :extraction_adapter, :summary_adapter, :extraction_classifier_adapter, :hn_client, :options, :story, :logger
 
   # Initialize the story summarizer
   # @param extraction_adapter [Ai::BaseAiAdapter] the AI adapter to use for content extraction (e.g., Perplexity)
@@ -61,7 +61,18 @@ class Ai::HnStorySummarizer
   # @param extraction_classifier_adapter [Ai::BaseAiAdapter] the AI adapter used for classifying extraction results
   # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] options to override defaults
-  def initialize(extraction_adapter, summary_adapter, extraction_classifier_adapter, story_id, options = {})
+  # @param logger [Logger] optional logger instance to use (will create one if not provided)
+  def initialize(extraction_adapter, summary_adapter, extraction_classifier_adapter, story_id, options = {}, logger = nil)
+    # Initialize HN client early for fetching.
+    @hn_client = HnApiClient.new
+
+    # Fetch story details first to get the ID for logging.
+    # This raises an error if the story is not found, halting initialization.
+    @story = fetch_and_validate_story(story_id)
+
+    # Use provided logger or create a new logger instance tagged with the story ID.
+    @logger = logger || Rails.logger.tagged("Story ##{@story ? @story['id'] : 'n/a'}")
+
     # Save the AI adapter for content extraction (Stage 1)
     @extraction_adapter = extraction_adapter
 
@@ -71,14 +82,8 @@ class Ai::HnStorySummarizer
     # Save the AI adapter for classifying extraction results
     @extraction_classifier_adapter = extraction_classifier_adapter
 
-    # Create a new HN API client
-    @hn_client = HnApiClient.new
-
     # Merge default options with provided options
     @options = DEFAULT_OPTIONS.merge(options)
-
-    # Fetch and validate the story using the provided ID
-    @story = fetch_and_validate_story(story_id)
   end
 
   # Generate a summary of the HN story's article content
@@ -121,7 +126,7 @@ class Ai::HnStorySummarizer
   # citation URLs
   def extract_technical_content
     # Log the start of extraction with story ID and URL for tracking in logs
-    Rails.logger.info("Stage 1: Extracting technical content from URL for story ##{story['id']}: #{story['url']}")
+    logger.info("Stage 1: Extracting technical content from URL: #{story['url']}")
 
     # Get the maximum number of attempts from options
     max_attempts = options[:max_attempts]
@@ -147,7 +152,7 @@ class Ai::HnStorySummarizer
     # Loop until we get successful content or exhaust retry attempts
     while attempt_count <= max_attempts
       # Log current attempt if not the first attempt
-      Rails.logger.info("Attempt #{attempt_count}/#{max_attempts} for extracting content from URL: #{story['url']}") \
+      logger.info("Attempt #{attempt_count}/#{max_attempts} for extracting content from URL: #{story['url']}") \
         if attempt_count > 1
 
       # Try a single extraction, catching our specific error
@@ -164,10 +169,13 @@ class Ai::HnStorySummarizer
         last_error = e
 
         # Log the failure for this attempt
-        Rails.logger.error("Content extraction attempt #{attempt_count}/#{max_attempts} failed: #{e.message}")
+        logger.error("Content extraction attempt #{attempt_count}/#{max_attempts} failed: #{e.message}")
 
         # Increment attempt counter
         attempt_count += 1
+
+        # Sleep for a random amount of time between attempts
+        sleep(rand(1..3))
 
         # Continue to the next iteration if attempts remain
         next
@@ -176,7 +184,7 @@ class Ai::HnStorySummarizer
 
     # If the loop finishes, it means all attempts failed
     # Raise a final error indicating persistent failure, including the last error message
-    raise ExtractionError, "Content extraction failed after #{max_attempts} attempts. Last error: #{last_error&.message}"
+    raise ExtractionError, "*Failure!* Content extraction failed after #{max_attempts} attempts. Last error: #{last_error&.message}"
   end
 
   # Helper method to try a single extraction
@@ -186,7 +194,7 @@ class Ai::HnStorySummarizer
     # Generate system and user prompts for the extraction AI model
     system_prompt, user_prompt = create_extraction_prompts
 
-    # Initialize content and citations
+    # Initialize a var for the extraction summary content and a var for the citations array
     content = nil
     citations = []
 
@@ -202,31 +210,18 @@ class Ai::HnStorySummarizer
       end
 
       # Log success information only if we have valid content (which implies no error was raised)
-      log_extraction_success(content, citations) unless content.nil? || content.strip.empty?
+      logger.info("Stage 1 complete: Successfully extracted technical content") unless content.nil? || \
+                                                                                       content.strip.empty?
 
       # Return the extracted content and citations on success
       [ content, citations ]
     # Rescue standard errors from the adapter call itself
     rescue StandardError => e
       # Log the specific error details for debugging
-      Rails.logger.error("Content extraction failed during adapter call: #{e.message}")
+      logger.error("Content extraction failed during adapter call: #{e.message}")
 
       # Wrap the original error in our custom extraction error
       raise ExtractionError, "Extraction adapter failed: #{e.message}", cause: e
-    end
-  end
-
-  # Helper method to log extraction success information
-  # @param content [String] the extracted content
-  # @param citations [Array] array of citation URLs
-  def log_extraction_success(content, citations)
-    # Log successful extraction for monitoring
-    Rails.logger.info("Stage 1 complete: Successfully extracted technical content")
-
-    # Log citation count for analytics and debugging
-    unless citations.empty?
-      # Log the number of citations found in the content
-      Rails.logger.info("Found #{citations.length} citations in extracted content")
     end
   end
 
@@ -238,7 +233,7 @@ class Ai::HnStorySummarizer
   # @raise [StandardError] Propagates errors from the summary adapter
   def generate_dev_summary(content, citations = [])
     # Log that we're starting the dev summary generation process
-    Rails.logger.info("Stage 2: Generating dev-focused summary for story ##{story['id']}")
+    logger.info("Stage 2: Generating dev-focused summary...")
 
     # Create the system and user prompts for dev summarization
     system_prompt, user_prompt = create_dev_summary_prompts(content, citations)
@@ -255,7 +250,7 @@ class Ai::HnStorySummarizer
     end
 
     # Log that the summarization completed successfully
-    Rails.logger.info("Stage 2 complete: Successfully generated dev-focused summary")
+    logger.info("Stage 2 complete: Successfully generated dev-focused summary")
 
     # Return the generated summary
     summary
@@ -462,7 +457,7 @@ class Ai::HnStorySummarizer
   # @return [String, nil] The raw JSON response text from the classifier, or nil if an error occurred.
   def call_extraction_classifier(system_prompt, user_prompt)
     # Log the attempt to call the classifier adapter.
-    Rails.logger.info("Attempting to classify extraction output via structured JSON...")
+    logger.info("Attempting to classify extraction output via structured JSON...")
 
     # Call the dedicated adapter method for structured JSON output, passing the required schema.
     @extraction_classifier_adapter.complete_with_json_schema(
@@ -474,7 +469,7 @@ class Ai::HnStorySummarizer
   # Rescue standard errors from the adapter call.
   rescue StandardError => e
     # Log the error encountered during the API call.
-    Rails.logger.error("Error calling extraction classifier adapter: #{e.message}")
+    logger.error("Error calling extraction classifier adapter: #{e.message}")
 
     # Return nil to indicate failure.
     nil
@@ -498,7 +493,7 @@ class Ai::HnStorySummarizer
       classification_status = validate_parsed_status(parsed_response, response_text)
     else
       # Log warning if response text was empty.
-      Rails.logger.warn("Extraction classifier returned empty response.")
+      logger.warn("Extraction classifier returned empty response.")
     end
 
     # Return the determined status (defaults to "failure").
@@ -506,7 +501,7 @@ class Ai::HnStorySummarizer
   # Rescue JSON parsing errors.
   rescue JSON::ParserError => e
     # Log the parsing error.
-    Rails.logger.error("Error parsing extraction classification response: #{e.message}")
+    logger.error("Error parsing extraction classification response: #{e.message}")
 
     # Ensure status remains "failure".
     "failure"
@@ -526,10 +521,10 @@ class Ai::HnStorySummarizer
 
       # Return status if valid, otherwise log warning and return "failure".
       return status if [ "success", "failure" ].include?(status)
-      Rails.logger.warn("Extraction classifier returned invalid status: '#{status}'.")
+      logger.warn("Extraction classifier returned invalid status: '#{status}'.")
     else
       # Log warning if JSON structure is invalid.
-      Rails.logger.warn("Extraction classifier response invalid structure: #{raw_response_text}")
+      logger.warn("Extraction classifier response invalid structure: #{raw_response_text}")
     end
 
     # Default to failure if validation fails.
@@ -556,7 +551,7 @@ class Ai::HnStorySummarizer
     classification_status = parse_and_validate_classification(response_text)
 
     # Log the final classification result.
-    Rails.logger.info("Extraction classification final status: #{classification_status}")
+    logger.info("Extraction classification final status: #{classification_status}")
 
     # Return the final status.
     classification_status

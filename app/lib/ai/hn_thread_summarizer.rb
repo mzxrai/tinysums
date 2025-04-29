@@ -26,18 +26,22 @@ class Ai::HnThreadSummarizer
   }.freeze
 
   # Define attribute readers for instance variables
-  attr_reader :adapter, :hn_client, :options, :story
+  attr_reader :adapter, :hn_client, :options, :story, :logger
 
   # Initialize the thread summarizer
   # @param adapter [Ai::BaseAiAdapter] the AI adapter to use for summarization
   # @param story_id [Integer] the HN story ID to summarize
   # @param options [Hash] options to override defaults
-  def initialize(adapter, story_id, options = {})
+  # @param logger [Logger] optional logger instance to use (will create one if not provided)
+  def initialize(adapter, story_id, options = {}, logger = nil)
     # Store the AI adapter for making summarization requests
     @adapter = adapter
 
     # Create a new HN API client instance
     @hn_client = HnApiClient.new
+
+    # Store the provided logger or create a default one
+    @logger = logger || Rails.logger.tagged("Story ##{story_id}")
 
     # Fetch the complete story with all its comments
     @story = fetch_story_with_comments(story_id)
@@ -89,13 +93,13 @@ class Ai::HnThreadSummarizer
   # @return [Hash, nil] the story with its comment tree or nil if not found
   def fetch_story_with_comments(story_id)
     # Log the start of the API call for monitoring
-    Rails.logger.info("HN API call: Fetching story ##{story_id} with comments")
+    logger.info("HN API call: Fetching story ##{story_id} with comments")
 
     # Use the HN client to fetch the story and all comments
     story = hn_client.get_story_with_comments(story_id)
 
     # Log the completion of the API call with comment count
-    Rails.logger.info(
+    logger.info(
       "HN API call complete: Fetched story ##{story_id} with #{story ? story["descendants"] || 0 : 0} comments"
     )
 
@@ -538,13 +542,13 @@ class Ai::HnThreadSummarizer
     system_prompt, user_prompt = create_summary_prompt(content)
 
     # Log message indicating summary generation has begun
-    Rails.logger.info("Generating summary for story ##{story['id']}")
+    logger.info("Generating summary for story ##{story['id']}")
 
     # Generate the summary using the AI adapter
     summary = adapter.complete(system_prompt, user_prompt)
 
     # Log that summary generation is complete
-    Rails.logger.info("Generated summary for story ##{story['id']}:\n#{summary}")
+    logger.info("Generated summary for story ##{story['id']}:\n#{summary}")
 
     # Return the generated summary
     summary

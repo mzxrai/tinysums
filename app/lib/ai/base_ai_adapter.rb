@@ -7,7 +7,7 @@ class Ai::BaseAiAdapter
   TOKEN_PER_CHAR_RATIO = 0.25
 
   # Define attribute readers
-  attr_reader :options, :connection
+  attr_reader :options, :connection, :logger
 
   # Class methods for adapter-specific configuration
   class << self
@@ -41,11 +41,19 @@ class Ai::BaseAiAdapter
     end
   end
 
-  # Initialize the Anthropic adapter
-  # @param options [Hash] Configuration options for the adapter
-  def initialize(options = {})
+  # Initialize the base adapter.
+  # Allows injecting configuration options and a specific logger instance.
+  # @param options [Hash] Configuration options for the adapter.
+  # @param logger [Logger] An optional logger instance (defaults to Rails.logger).
+  def initialize(options = {}, logger: nil)
+    # Merge default class options with instance-specific options.
     @options = self.class.default_completion_options.merge(options)
+    # Create the Faraday connection for API calls.
     @connection = create_connection
+    # Store the provided logger or default to the global Rails logger.
+    @logger = logger || Rails.logger
+    # Log adapter initialization, which will now use the assigned logger.
+    @logger.info("#{self.class.name} initialized with model: #{@options[:model]}")
   end
 
   # Calculate maximum input size in characters based on context window
@@ -82,7 +90,9 @@ class Ai::BaseAiAdapter
   # @param user_prompt [String] user message/question
   # @return [String] the generated text
   def complete(system_prompt, user_prompt)
-    Rails.logger.info("Calling API for #{options[:model]}")
+    # Log the API call initiation using the instance logger.
+    logger.info("Calling standard completion API for model: #{options[:model]}")
+    # Delegate to the specific API call implementation.
     call_api(system_prompt, user_prompt)
   end
 
