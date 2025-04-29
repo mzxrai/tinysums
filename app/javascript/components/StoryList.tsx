@@ -150,7 +150,7 @@ const StoryCard: React.FC<StoryCardProps> = ({ story, index }) => {
             author={story.by}
             time={story.time}
             commentCount={story.descendants}
-            url={story.url}
+            url={story.url ?? undefined}
           />
 
           {/* Conditionally render the summary section. */}

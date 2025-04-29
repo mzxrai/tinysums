@@ -548,7 +548,7 @@ class Ai::HnThreadSummarizer
     summary = adapter.complete(system_prompt, user_prompt)
 
     # Log that summary generation is complete
-    logger.info("Generated summary for story ##{story['id']}:\n#{summary}")
+    logger.info("Summary generation complete")
 
     # Return the generated summary
     summary
@@ -573,29 +573,30 @@ class Ai::HnThreadSummarizer
 
       2. Expert Contributions:
          - Comments from experts with firsthand knowledge or experience
+         - Interesting anecdotes
 
       3. Resources and References:
-         - Recommended articles, tools, libraries, papers, or specific resources (**include verbatim URLs if
-           referenced**)
-         - Relevant context
+         - Recommended articles, tools, libraries, papers, or specific resources (**include verbatim URLs if referenced,
+           formatted as Markdown links**)
+         - Relevant "broader context" if mentioned
          - Benchmarks or empirical data
 
       5. Practical Takeaways:
          - Actionable advice
          - Potential pitfalls or gotchas
          - Trade-offs between approaches
-         - Future developments or research areas
+         - Future developments or research areas to watch
 
       ### Guidelines
 
-      - Write in an informal tone that's appropriate for a blunt, somewhat persnickety software developer audience.
-      - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim**; do not truncate
-        them in any way (if you do; they won't work!).
+      - Write in an informal tone that's appropriate for a blunt, discerning software developer audience.
       - Cite particularly interesting comments by specific usernames where possible. When referencing usernames, format
         them using backticks, like this: `username`. If you choose to reference specific comments, which is recommended,
         do not reference them by their index (e.g., "1.2.1"), but rather simply use the author's username (e.g, "`mbm`
         thinks that...").
-      - If you include URLs in your summary, format them as Markdown links so users can easily click through.
+      - Include as many specific URLs that were referenced as possible. Reproduce the URLs **verbatim** and format them
+        as Markdown links so users can easily click through; do not truncate them in any way (if you do; they won't
+        work!).
 
       ### What to avoid doing
 
@@ -621,7 +622,7 @@ class Ai::HnThreadSummarizer
       ---
 
       *Remember*: Return only the Markdown summary starting with the first heading; do not include any preface or
-      post-text.
+      post-text. Immediately grab the reader's attention -- You have 5 seconds to either hook them or lose them.
     INSTRUCTIONS
 
     # Prepare the full system prompt
@@ -631,6 +632,11 @@ class Ai::HnThreadSummarizer
       You are an expert Hacker News (HN) commentator who writes summaries of recent HN comment threads. Your goal is to
       create concise yet surprisingly specific and technically nuanced summaries of provided Hacker News discussion
       threads.
+
+      Most importantly, your summaries should be interesting to read and not boring. Think less "boring blog article
+      article no one will ever read" and more "insightful tl;dr for skeptical, quick-witted developers". If a
+      20-something software developer riding on the train to work in the morning wouldn't want to read it, you shouldn't
+      write it.
 
       If the topic is a controversial one, you may choose to make your summary somewhat edgy; but, remain factual and
       unbiased.

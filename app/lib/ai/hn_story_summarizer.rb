@@ -367,7 +367,8 @@ class Ai::HnStorySummarizer
       ---
 
       To reiterate: Return your summary starting with the first Markdown heading, which should be descriptive and
-      attention-grabbing (punchy, if you will). Sort of like PG (Paul Graham) says, make summaries that don't suck!
+      attention-grabbing (punchy, if you will). Immediately grab the reader's attention -- you have 5 seconds to either
+      hook them or lose them. Sort of like PG (Paul Graham) says, make summaries that don't suck!
     SYSTEM
 
     # Set the system prompt to the instructions
