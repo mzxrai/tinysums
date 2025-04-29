@@ -274,43 +274,45 @@ class Ai::HnStorySummarizer
       When given a URL, your task is to:
 
       1. Access the URL and read the entire article
-      2. Create an exhaustive technical summary that captures ALL important information
+      2. Create an exhaustive technical summary in Markdown that captures ALL important information
       3. Include verbatim quotes of key points, maintaining their exact wording
       4. Preserve all technical details, data points, numbers, and statistics
-      5. Include any code snippets exactly as they appear
+      5. Include any code snippets exactly as they appear, and format them as valid Markdown code blocks
       6. Capture methodologies, algorithms, and technical approaches described
 
       Your summary should be thorough and comprehensive, not missing any significant technical information.
-      It should be written for a sophisticated technical audience of software developers and engineers.
+      It should be written for a demanding technical audience of skeptical software developers and engineers.
     SYSTEM
 
     # User prompt specifies the URL and extraction requirements
     user_prompt = <<~USER
-      Please access this URL and provide an exhaustive technical rundown: #{story['url']}
+      Please access this URL and provide an exhaustive technical overview, formatted in Markdown: #{story['url']}
 
       This article was posted on Hacker News with the title: "#{story['title']}"
 
-      I need a concise yet detailed overview that:
-      - Includes ALL key technical concepts, approaches and methodologies
-      - Preserves verbatim quotes from key figures or experts
-      - Includes ALL important data points, numbers, and statistics
-      - Captures ALL technical specs, parameters, and benchmarks
-      - Includes any high-value code examples exactly as they appear
-      - Preserves ALL algorithm details, architectural decisions, and design patterns mentioned
-      - Highlights trade-offs, limitations, and technical challenges mentioned
-      - Includes ALL relevant URLs, references to tools, libraries, or resources **verbatim**
-      - Uses simple, understandable, blunt language avoiding unnecessarily large words
+      I'd like you to provide a detailed overview in Markdown that:
 
-      Ensure the overview is comprehensive while being well-organized and readable.
+      1. Includes key technical concepts, approaches and methodologies
+      2. Reproduces interesting/important quotes or excerpts from the article **verbatim**
+      3. Includes mentioned or cited URLs **verbatim**
+      4. Includes important data points, numbers, and statistics **verbatim**
+      5. Captures interesting technical specs, parameters, and benchmarks exactly as they appear
+      6. Includes any high-value code examples exactly as they appear
+      7. Preserves any algorithm details, architectural decisions, and design patterns mentioned
+      8. Highlights trade-offs, limitations, and technical challenges mentioned
+      9. Uses simple, understandable, blunt language, avoiding unnecessarily large words
 
-      If the article includes code snippets or code samples, and you choose to include them in your rundown, reproduce
-      them **verbatim**. Do not modify them in any way.
+      If the article includes code snippets or code samples, and you choose to include them in your overview (which is
+      encouraged), reproduce them **verbatim** in Markdown code blocks. Do not modify them in any way.
 
-      If you're unable to access the provided URL, simply return the string "unable to access" verbatim somewhere in
-      your response. This is important, as it lets us detect whether the retrieval has failed.
+      Important: If you're unable to access the provided URL, simply return the string "unable to access url" as your
+      response. This is essential, as it lets us detect whether the retrieval has failed.
 
-      Format the overview in valid Markdown. Don't include any introductory text like "Here's an overview...";
-      instead, return the overview by itself.
+      ---
+
+      To reiterate: Format the overview in valid Markdown. Don't include any introductory text like "Here's an
+      overview..."; instead, return the overview itself starting with the first Markdown heading, which should read
+      like a punchy headline summarizing the article.
     USER
 
     # Return an array containing both the system prompt and user prompt
@@ -324,34 +326,40 @@ class Ai::HnStorySummarizer
   def create_dev_summary_prompts(content, citations = [])
     # Instructions that we'll use both in the system prompt and the user prompt
     instructions = <<~SYSTEM
-      You're an expert at summarizing articles shared on Hacker News for a blunt developer audience.
+      You're an expert at summarizing articles shared on Hacker News for a blunt and discerning software developer
+      audience.
 
       ## General instructions
 
-      When provided with an article's detailed technical overview, you prepare the ultra-readable, dev-focused summary.
+      When provided with an article's detailed technical overview, you prepare the ultra-readable, software developer-
+      oriented summary.
 
-      Maintain key technical details, but make it a little more concise and engaging.
+      Maintain key technical details. At the same time, make your summary a little more concise and engaging. Think less
+      "boring blog article no one will ever read" and more "insightful tl;dr for skeptical, quick-witted developers".
 
       Reproduce important data points, specific quotes, URLs., etc., **verbatim**. Do NOT make details up.
 
       In essence, your summary should be just as informative as the summary you're provided with, but more readable.
-
-      If you find any citations in the technical overview, use them to create a list of numbered references at the end
-      of your summary. Format the citations as proper **Markdown links** in an ordered Markdown list.
+      The goal is to produce awesome summaries that devs will actually want to read on the train or bus each morning.
 
       ## Summary format
 
       Produce your summary in *valid Markdown*. Return JUST the summary starting with the first Markdown heading (which
-      should be a second-level ("##") heading). Do not include any preface or post-text. In other words, don't start
-      your summary with, "Ok devs, here's your summary..." or anything like that. Also, don't title your summary a
-      "summary for devs" or speak to developers directly; the summary is *for* them, but not written *to* them.
-      Developers will be presented with many of these summaries on the same webpage side by side, so speaking to them
-      directly would be redundant and annoying.
+      should be a second-level ("##") heading).
 
-      If you include URLs in your summary, format them as Markdown links so users can easily click through.
+      If you find any citations in the technical overview, use them to create a list of numbered references at the end
+      of your summary. Format the citations as proper **Markdown links** in an ordered Markdown list.
+
+      Do not include any preface or post-text. In other words, don't start your summary with, "Ok devs, here's your
+      summary..." or anything like that. Also, don't title your summary a "summary for devs" or speak to developers
+      directly; the summary is *for* them, but not written *to* them. Developers will be presented with many of these
+      summaries on the same webpage side by side, so speaking to them directly would be redundant and annoying.
+
+      If you include URLs in your summary, which is highly encouraged, format them as Markdown links so users can
+      easily click through. Make sure to reproduce the URLs verbatim so they're actual functioning links for our users.
 
       If the overview we provide you includes code snippets or code samples, and you choose to include them in your
-      summary, reproduce them **verbatim**. Do not modify them in any way.
+      summary, reproduce them **verbatim** with proper Markdown formatting. Do not modify the code in any way.
 
       When generating Markdown, if you choose to include blockquotes, ensure you first start a **blank new line** and
       then add a ">" character followed by a space then the quote.
@@ -360,8 +368,8 @@ class Ai::HnStorySummarizer
 
       ---
 
-      Simply return your summary starting with the first Markdown heading, which should be descriptive and
-      attention-grabbing.
+      To reiterate: Return your summary starting with the first Markdown heading, which should be descriptive and
+      attention-grabbing (punchy, if you will). Sort of like PG (Paul Graham) says, make summaries that don't suck!
     SYSTEM
 
     # Set the system prompt to the instructions
@@ -386,7 +394,7 @@ class Ai::HnStorySummarizer
     user_prompt = <<~USER
       Here is the technical overview of an article titled "#{story['title']}" that was posted on Hacker News.
 
-      I will provide the technical overview for you, and then provide your instructions to generate the summary.
+      I will provide the technical overview for you, and then reiterate your instructions to generate the summary.
 
 
       --------------- BEGIN TECHNICAL OVERVIEW ---------------
@@ -400,7 +408,7 @@ class Ai::HnStorySummarizer
 
       --------------- BEGIN INSTRUCTIONS FOR SUMMARY GENERATION ---------------
 
-      To create your summary, please follow these instructions:
+      To create your summary, follow these instructions precisely:
 
       #{instructions}
 
@@ -429,12 +437,13 @@ class Ai::HnStorySummarizer
       *Success* means the text looks like a plausible summary or extraction of article content. For a summary to be
       considered a success, it should contain no indication that the extraction process failed.
 
-      Respond using the provided JSON schema.
+      Respond as valid JSON only using the provided JSON schema.
     SYSTEM
 
     # Define the user prompt providing the text to classify.
     user_prompt = <<~USER
       Please classify the following text based on whether it indicates successful content extraction or a failure.
+
       Use the provided JSON schema for your response.
 
       Text to classify:
