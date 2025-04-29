@@ -1,3 +1,13 @@
-my_hard_job:
-  cron: "* * * * *"
-  class: "HardJob"
+# Sidekiq Cron Schedule Configuration
+#
+# Format:
+# job_name:
+#   cron: "* * * * *"
+#   class: "ClassName"
+#   args: [argument1, argument2]
+
+# Hourly job to fetch and summarize top Hacker News stories
+top_stories_summary_job:
+  cron: "0 * * * *" # Run at the top of every hour
+  class: "TopStoriesSummaryJob"
+  description: "Fetches top HN stories and generates AI summaries for database storage"

@@ -22,7 +22,8 @@
     <%= javascript_include_tag "application", "data-turbo-track": "reload", type: "module" %>
   </head>
 
-  <body>
+  <%# Apply base dark theme classes and subtle background to the body %>
+  <body class="font-sans antialiased bg-zinc-50/50">
     <%= yield %>
   </body>
 </html>

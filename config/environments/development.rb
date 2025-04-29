@@ -72,4 +72,9 @@ Rails.application.configure do
 
   # Use Sidekiq for Active Job
   config.active_job.queue_adapter = :sidekiq
+
+  # Send Rails logs to STDOUT in development
+  logger = ActiveSupport::Logger.new(STDOUT)
+  logger.formatter = config.log_formatter
+  config.logger = ActiveSupport::TaggedLogging.new(logger)
 end

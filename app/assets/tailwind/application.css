@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* Define data-theme attribute selector for dark mode */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Import markdown styles */
+@import "./markdown.css";
+
+/* You can add any custom CSS below if needed */
+
+/* CSS rules for summary preview line clamping */
+.summary-preview-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3; /* Show 3 lines */
+  line-clamp: 3; /* Standard property */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

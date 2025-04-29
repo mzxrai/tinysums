@@ -12,8 +12,22 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # API routes
+  namespace :api do
+    resources :stories, only: [ :index, :show ]
+  end
+
   # Mount Sidekiq web UI
   mount Sidekiq::Web => "/sidekiq"
+
+  # Set root path to React SPA
+  root "react#index"
+
+  # Catch-all route for React SPA - MUST be the last route
+  get "*path", to: "react#index", constraints: lambda { |request|
+    # Only handle HTML requests (exclude API, assets, and non-HTML requests)
+    request.format.html? &&
+    # Use a single regex match instead of multiple string comparisons
+    !request.path.match?(/\A\/(api|assets|cable|sidekiq)\//)
+  }
 end
