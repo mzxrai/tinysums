@@ -31,6 +31,10 @@ class TopStoriesSummaryJob
     # This ensures we have the latest stories and rankings
     update_stories_database
 
+    # Invalidate the API cache for the top stories index page
+    # This ensures users get fresh data after the database update
+    Rails.cache.delete("api/stories/index/top_stories_v1")
+
     # Step 2: Generate any missing summaries using AI
     # This only processes stories that don't already have summaries
     generate_missing_summaries
