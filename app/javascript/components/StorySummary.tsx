@@ -334,20 +334,15 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
   // Handle the initial loading state before summaries are ready.
   // If neither summary is ready:
   if (!hasArticleSummary && !hasCommentsSummary) {
-    // Check if the status indicates summaries are still pending.
-    if (!status || (status.content === 'pending' && status.comments === 'pending')) {
-      // Return a loading message indicator.
-      return (
-        // Container for the loading message with padding and text styling.
-        <div className="p-3 text-sm text-gray-500">
-          {/* Loading message text. */}
-          Generating summaries. Check back soon...
-        </div>
-      );
-    }
-    // If status is not pending (e.g., failed, or unexpected state) and summaries aren't ready, render nothing for now.
-    // Return null to render nothing for this component instance.
-    return null;
+    // If neither summary is ready to display for any reason (pending, failed, empty completed),
+    // show the generating message. We can add more nuanced messages for failures later if needed.
+    return (
+      // Container for the loading message with padding and text styling.
+      <div className="p-3 text-sm text-gray-500">
+        {/* Loading message text. */}
+        Generating summaries. Check back soon...
+      </div>
+    );
   }
 
   // Main return statement for the component's JSX structure.
@@ -449,7 +444,6 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
                 </ReactMarkdown>
               </div>
             )}
-            {/* Case 3 (Neither summary exists) is handled by the loading state check further up, so no explicit rendering needed here. */}
           </div>
         )}
 
