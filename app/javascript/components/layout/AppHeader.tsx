@@ -114,7 +114,8 @@ export const AppHeader: React.FC = () => {
         <span className="font-semibold">tinysums</span>
 
         {/* --- Tagline Container: Always rendered --- */}
-        <div className="inline-block relative w-[300px] ml-1 overflow-hidden align-middle h-4">
+        {/* Responsive width: w-0 by default, w-[300px] on sm+ screens */}
+        <div className="inline-block relative ml-1 overflow-hidden align-middle h-4 w-0 sm:w-[300px]">
           {/* Conditionally render AnimatePresence only when animation is active */}
           {isAnimationActive ? (
             <AnimatePresence mode="wait">
