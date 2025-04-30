@@ -19,7 +19,6 @@ default: &default
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
 
-
 development:
   <<: *default
   database: hnsum_development
@@ -80,6 +79,7 @@ test:
 #
 production:
   <<: *default
-  database: hnsum_production
-  username: hnsum
-  password: <%= ENV["HNSUM_DATABASE_PASSWORD"] %>
+  database: tinysums
+  username: railsapp
+  password: <%= ENV["TSDBPW"] %>
+  host: 
