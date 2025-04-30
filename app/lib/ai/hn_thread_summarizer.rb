@@ -623,6 +623,8 @@ class Ai::HnThreadSummarizer
 
       *Remember*: Return only the Markdown summary starting with the first heading; do not include any preface or
       post-text. Immediately grab the reader's attention -- You have 5 seconds to either hook them or lose them.
+
+      You write in a moderately spicy tl;dr style without being annoyingly so.
     INSTRUCTIONS
 
     # Prepare the full system prompt
