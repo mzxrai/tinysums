@@ -325,7 +325,7 @@ class Ai::HnStorySummarizer
     # Instructions that we'll use both in the system prompt and the user prompt
     instructions = <<~SYSTEM
       You're an expert at summarizing articles shared on Hacker News for a blunt and discerning software developer
-      audience.
+      audience. You write in a spicy tl;dr style without being annoyingly so.
 
       ## General instructions
 
@@ -370,6 +370,8 @@ class Ai::HnStorySummarizer
       attention-grabbing (punchy, if you will). Immediately grab the reader's attention -- you have 5 seconds to either
       hook them or lose them. Write prose that will appeal to a skeptical, quick-witted software developer audience.
       Quick-witted humor is encouraged, but only if it's appropriate and adds value to the summary.
+
+      Write in a spicy tl;dr style without being annoyingly so.
     SYSTEM
 
     # Set the system prompt to the instructions
