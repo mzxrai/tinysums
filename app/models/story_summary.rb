@@ -3,7 +3,7 @@
 class StorySummary < ApplicationRecord
   # Association with the parent Story
   # Each summary belongs to exactly one story
-  belongs_to :story
+  belongs_to :story, touch: true
 
   # Validations to ensure data integrity
   # Every summary must be associated with a story
