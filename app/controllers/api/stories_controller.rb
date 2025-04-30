@@ -9,20 +9,15 @@ module Api
     # Returns the top active stories from the database as JSON, including any generated summaries
     # @return [void] - renders JSON via Jbuilder view
     def index
-      # Fetch the cached JSON string or generate, cache, and return it
-      json_response = Rails.cache.fetch("api/stories/index/top_stories_v1", expires_in: 1.hour) do
-        # Fetch active stories with their summaries
-        @stories = Story.active
-                        .ordered_by_rank # Use rank ordering to match HN front page
-                        .limit(STORY_LIMIT)
-                        .includes(:story_summary, :comments_summary)
+      # Fetch active stories with their summaries in a single chained query
+      # The view will handle fragment caching for individual stories
+      @stories = Story.active
+                      .ordered_by_rank # Use rank ordering to match HN front page
+                      .limit(STORY_LIMIT)
+                      .includes(:story_summary, :comments_summary)
 
-        # Render the Jbuilder view to a string *within* the cache block
-        render_to_string(template: "api/stories/index", formats: [ :json ])
-      end
-
-      # Render the JSON (either from cache or freshly generated)
-      render json: json_response
+      # Render stories using Jbuilder with fragment caching
+      # View: app/views/api/stories/index.json.jbuilder
     end
 
     # GET /api/stories/:id
