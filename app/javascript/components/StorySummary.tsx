@@ -340,7 +340,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
       // Container for the loading message with padding and text styling.
       <div className="p-3 text-sm text-gray-500">
         {/* Loading message text. */}
-        Generating summaries. Check back soon...
+        Cooking summaries. Check back soon...
       </div>
     );
   }
