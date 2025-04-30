@@ -12,7 +12,7 @@ export const AppHeader: React.FC = () => {
   return (
     // Header element: Sticky positioning, background, border, flex layout
     // Adjusted dark mode colors for better contrast/consistency
-    <header className="sticky top-0 z-10 h-10 bg-white dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700 flex items-center justify-between">
+    <header className="sticky top-0 z-10 h-10 bg-white border-b border-gray-200 flex items-center justify-between after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-gradient-to-r after:from-transparent after:via-[#ff9000] after:to-transparent after:content-['']">
       {/* Left side: Brand Name and Tagline */}
       {/* Added left padding here to prevent text touching the edge */}
       <span className="pl-4 text-lg font-semibold text-gray-800 dark:text-zinc-100">
