@@ -180,7 +180,7 @@ class TopStoriesSummaryJob
     # Maximum number of concurrent threads to use
     # This controls how many API calls we make in parallel
     # Adjust based on API rate limits and server capacity
-    max_threads = 1
+    max_threads = 5
 
     # Divide the items into smaller batches of BATCH_SIZE
     # Each batch will be processed with concurrent threads
