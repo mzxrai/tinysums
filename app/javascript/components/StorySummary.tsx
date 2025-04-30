@@ -338,7 +338,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
     // show the generating message. We can add more nuanced messages for failures later if needed.
     return (
       // Container for the loading message with padding and text styling.
-      <div className="p-3 text-sm text-gray-500">
+      <div className="pt-3 pr-3 pl-3 text-sm text-gray-500">
         {/* Loading message text. */}
         Cooking summaries. Check back soon...
       </div>
