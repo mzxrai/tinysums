@@ -4,7 +4,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { useSummary } from '../contexts/SummaryContext';
 import { SparklesIcon } from '@heroicons/react/24/solid';
-import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 /**
  * @description Sanitization schema for rehype-sanitize.
@@ -338,7 +338,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
     // show the generating message. We can add more nuanced messages for failures later if needed.
     return (
       // Container for the loading message with padding and text styling.
-      <div className="pt-3 text-sm text-gray-500">
+      <div className="pt-2 text-sm text-gray-500">
         {/* Loading message text. */}
         Cooking summaries. Check back soon...
       </div>
@@ -427,9 +427,22 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
             {!hasArticleSummary && hasCommentsSummary && (
               // Container for the comments summary preview.
               // Added summary-preview-clamp class for CSS line clamping.
-              <div className="summary-preview-clamp">
+              <div className="summary-preview-clamp space-y-2">
+                {/* --- NEW: Badge for inaccessible article --- */}
+                {/* Conditionally render this badge only if there was a URL AND the content status is explicitly 'failed' */}
+                {hasUrl && status?.content === 'failed' && (
+                  // Inline-flex container for the badge
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                    {/* XCircle Icon (Heroicons) */}
+                    <XCircleIcon className="w-3 h-3 mr-1 text-red-500" />
+                    {/* Badge text */}
+                    Unable to access story
+                  </span>
+                )}
+
                 {/* Badge indicating "Comments Summary". Add sparkles icon. */}
-                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 mb-2">
+                {/* This badge and preview will still show even if the article was inaccessible */}
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
                   {/* Sparkles Icon (Heroicons) */}
                   <SparklesIcon className="w-3 h-3 mr-1" />
                   Comments Summary
