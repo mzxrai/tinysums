@@ -254,20 +254,26 @@ class TopStoriesSummaryJob
     # Log that we're starting to generate a summary for monitoring
     story_logger.info("Generating content summary")
 
-    # Create a new summary record if one doesn't exist
-    # This ensures we have a record to update even if generation fails
-    summary = story.story_summary || story.create_story_summary
+    # Find or build the summary record (does not save yet)
+    summary = story.story_summary || story.build_story_summary
+
+    # Set status to pending if needed (new record or not already pending)
+    # Use bang method (save!) which raises error on failure, caught by outer rescue
+    summary.status_pending! if summary.new_record? || !summary.status_pending?
 
     begin
       # Generate the summary content using the story logger
       content = generate_content_summary(story, story_logger)
 
-      # Save the summary to the database and log the result
+      # Save the summary to the database and log the result (also sets status)
       save_summary(summary, content, "content", story.hn_id)
     rescue => e
       # Log any errors that occur during generation
-      # This helps with debugging AI-related issues
       log_generation_error("content", story.hn_id, e)
+
+      # Explicitly set status to failed on error
+      # Use safe navigation in case summary object is unexpectedly nil
+      summary&.update(status: :failed)
     end
   end
 
@@ -309,20 +315,26 @@ class TopStoriesSummaryJob
     # Log that we're starting to generate a comments summary
     story_logger.info("Generating comments summary")
 
-    # Create a new summary record if one doesn't exist
-    # This ensures we have a record to update even if generation fails
-    summary = story.comments_summary || story.create_comments_summary
+    # Find or build the summary record (does not save yet)
+    summary = story.comments_summary || story.build_comments_summary
+
+    # Set status to pending if needed (new record or not already pending)
+    # Use bang method (save!) which raises error on failure, caught by outer rescue
+    summary.status_pending! if summary.new_record? || !summary.status_pending?
 
     begin
       # Generate the comment thread summary using the AI adapter and story logger
       content = generate_thread_summary(story, story_logger)
 
-      # Save the summary to the database and log the result
+      # Save the summary to the database and log the result (also sets status)
       save_summary(summary, content, "comments", story.hn_id)
     rescue => e
       # Log any errors that occur during generation
-      # This helps with debugging AI-related issues
       log_generation_error("comments", story.hn_id, e)
+
+      # Explicitly set status to failed on error
+      # Use safe navigation in case summary object is unexpectedly nil
+      summary&.update(status: :failed)
     end
   end
 
@@ -358,18 +370,29 @@ class TopStoriesSummaryJob
   # @return [void]
   def save_summary(summary, content, type, story_id)
     # Only save if we received actual content
-    # Empty content could indicate an AI generation failure
+    # Empty content indicates an AI generation failure
     if content.present?
-      # Update the summary record with the new content
-      summary.update(content: content)
+      # Update the summary record with the new content and set status to completed
+      # Use update! to raise errors on validation failure
+      summary.update!(content: content, status: :completed)
 
       # Log success for monitoring
-      logger.info("Saved #{type} summary for story ##{story_id}")
+      logger.info("Saved #{type} summary for story ##{story_id}, status set to completed")
     else
+      # If content is empty, set status to failed and content to nil
+      # Use update! to raise errors on validation failure
+      summary.update!(content: nil, status: :failed)
+
       # Log warning if we received empty content
       # This indicates a potential issue with the AI or the content
-      logger.warn("Generated empty #{type} summary for story ##{story_id}")
+      logger.warn("Generated empty #{type} summary for story ##{story_id}, status set to failed")
     end
+  rescue => e
+    # Log error if saving the final status fails
+    logger.error("Failed to save final #{type} summary status for ##{story_id}: #{e.message}")
+
+    # Re-raise the error to potentially trigger job retry mechanisms if needed
+    raise e
   end
 
   # Log an error that occurred during summary generation

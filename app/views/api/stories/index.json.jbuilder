@@ -23,14 +23,17 @@ json.array! @stories do |story|
     # Include status information for the frontend
     # This lets the UI show appropriate loading/error states
     json.status do
-      # Content summary status (returns null if no record exists)
-      json.content story.story_summary ? "completed" : nil
+      # Content summary status - directly from the record, or nil if no record exists
+      # Use safe navigation (`&.`) to avoid errors if summary record is nil
+      json.content story.story_summary&.status
 
-      # Comments summary status (returns null if no record exists)
-      json.comments story.comments_summary ? "completed" : nil
+      # Comments summary status - directly from the record, or nil if no record exists
+      # Use safe navigation (`&.`) to avoid errors if summary record is nil
+      json.comments story.comments_summary&.status
 
-      # Timestamp of the most recent summary generation
-      json.updatedAt (story.story_summary || story.comments_summary)&.updated_at&.to_i
+      # Timestamp of the most recent summary update (either type)
+      # Use the latest updated_at from whichever summary exists and was updated last
+      json.updatedAt [ story.story_summary&.updated_at, story.comments_summary&.updated_at ].compact.max&.to_i
     end
   end
 end

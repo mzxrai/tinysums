@@ -4,7 +4,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { useSummary } from '../contexts/SummaryContext';
 import { SparklesIcon } from '@heroicons/react/24/solid';
-import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 /**
  * @description Sanitization schema for rehype-sanitize.
@@ -338,7 +338,7 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
     // show the generating message. We can add more nuanced messages for failures later if needed.
     return (
       // Container for the loading message with padding and text styling.
-      <div className="pt-3 text-sm text-gray-500">
+      <div className="pt-2 text-sm text-gray-500">
         {/* Loading message text. */}
         Cooking summaries. Check back soon...
       </div>
@@ -426,14 +426,33 @@ export const StorySummary: React.FC<StorySummaryProps> = ({
             {/* This condition ensures we don't show comments preview if article preview is already shown. */}
             {!hasArticleSummary && hasCommentsSummary && (
               // Container for the comments summary preview.
-              // Added summary-preview-clamp class for CSS line clamping.
+              // Removed space-y-2 here, spacing handled by inner div
               <div className="summary-preview-clamp">
-                {/* Badge indicating "Comments Summary". Add sparkles icon. */}
-                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 mb-2">
-                  {/* Sparkles Icon (Heroicons) */}
-                  <SparklesIcon className="w-3 h-3 mr-1" />
-                  Comments Summary
-                </span>
+                {/* --- NEW: Wrapper div for horizontal badges --- */}
+                {/* Apply flex, alignment, spacing (increased to 3), and margin bottom */}
+                <div className="flex items-center space-x-3 mb-2">
+
+                  {/* Blue Badge: Comments Summary - Always shown first in this block */}
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                    {/* Sparkles Icon (Heroicons) */}
+                    <SparklesIcon className="w-3 h-3 mr-1" />
+                    Comments Summary
+                  </span>
+
+                  {/* Conditionally render the failure badge second if there was a URL */}
+                  {hasUrl && (
+                    // Grey Badge: No story summary
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                      {/* XCircle Icon (Heroicons) - Grey */}
+                      <XCircleIcon className="w-3 h-3 mr-1 text-gray-500" />
+                      {/* Badge text */}
+                      Unable to Access Story
+                    </span>
+                  )}
+
+                </div>
+                {/* --- END Badge Wrapper --- */}
+
                 {/* Render the comments summary preview using Markdown components. */}
                 <ReactMarkdown
                   components={markdownComponents}

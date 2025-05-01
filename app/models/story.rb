@@ -26,7 +26,16 @@ class Story < ApplicationRecord
 
   # Find stories that need their article content summarized
   # A story needs summarization if it has no associated summary record
-  scope :needs_story_summary, -> { where.missing(:story_summary) }
+  # OR if the existing summary generation failed
+  scope :needs_story_summary, lambda {
+    # Join with story_summaries table, using LEFT OUTER JOIN to include stories without summaries
+    left_outer_joins(:story_summary)
+      # Select stories where either:
+      # 1. The story_summary record doesn't exist (id is NULL)
+      # 2. The story_summary status is marked as 'failed'
+      .where(story_summaries: { id: nil })
+      .or(where(story_summaries: { status: StorySummary.statuses[:failed] }))
+  }
 
   # Find stories that need their comments summarized
   # A story needs comment summarization if it has no associated comments summary record
