@@ -9,7 +9,7 @@ class CommentsSummary < ApplicationRecord
   # - pending: Initial state, generation not yet attempted or in progress
   # - completed: Generation succeeded, content is present
   # - failed: Generation attempted but failed
-  enum status: {
+  enum :status, {
     pending: "pending",     # The summary generation is pending
     completed: "completed", # The summary generation completed successfully
     failed: "failed"        # The summary generation failed
