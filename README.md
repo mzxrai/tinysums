@@ -100,7 +100,7 @@ Before you begin, ensure you have the following installed:
 
 ## Running Background Jobs (Sidekiq)
 
-**Important:** The application will initially appear empty (no stories listed) when you first access it. You must run the `TopStoriesSummaryJob` (via Sidekiq) at least once to fetch and summarize the initial set of Hacker News stories.
+**Important:** The application will initially appear empty (no stories listed) when you first access it. You must run the `TopStoriesSummaryJob` (via Sidekiq) at least once to fetch and summarize the initial set of Hacker News stories. Subsequent runs of the job will refresh the stories database and regenerate summaries as needed.
 
 1. **Start Sidekiq:**
 

@@ -145,25 +145,6 @@ export const AppHeader: React.FC = () => {
         </div>
         {/* --- End Tagline Container --- */}
       </span>
-
-      {/* Right side: Creator Credit Link */}
-      {/* Added right padding here to prevent text touching the edge */}
-      <span className="pr-4 text-sm text-gray-500">
-        {/* Introductory text */}
-        by{' '}
-        {/* Link to the creator's GitHub profile */}
-        <a
-          href="https://github.com/mzxrai"
-          target="_blank"
-          rel="noopener noreferrer"
-          // Styling for the link, including hover effects and transitions
-          // Ensures the link is visually distinct and interactive
-          className="text-gray-600 hover:text-blue-700 transition-colors duration-150"
-        >
-          {/* The actual link text (GitHub handle) */}
-          @mzxrai
-        </a>
-      </span>
     </header>
   );
 }; 
