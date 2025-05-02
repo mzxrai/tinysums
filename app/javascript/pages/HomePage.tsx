@@ -30,7 +30,7 @@ export const HomePage: React.FC = () => {
         {/* Describes the source and refresh rate of the data */}
         <p className="text-sm text-gray-600 dark:text-zinc-400 text-center mt-4 mb-4 px-4">
           {/* Content description */}
-          HN top 30 summarized by gemini 2.5 pro | refreshes hourly
+          HN top 30 stories & comments summarized | refreshes hourly
         </p>
 
         {/* Wrapper for stories feed */}
