@@ -21,13 +21,13 @@ default: &default
 
 development:
   <<: *default
-  database: hnsum_development
+  database: tinysums_development
 
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.
   # When left blank, PostgreSQL will use the default role. This is
   # the same name as the operating system user running Rails.
-  #username: hnsum
+  #username: tinysums
 
   # The password associated with the PostgreSQL role (username).
   #password:
@@ -55,7 +55,7 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: hnsum_test
+  database: tinysums_test
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
@@ -79,7 +79,4 @@ test:
 #
 production:
   <<: *default
-  database: tinysums
-  username: railsapp
-  password: <%= ENV["TSDBPW"] %>
-  host: 
+  database: tinysums_production
