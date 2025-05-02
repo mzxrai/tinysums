@@ -25,7 +25,7 @@ class Ai::Adapters::GoogleAdapter < Ai::BaseAiAdapter
     def default_completion_options
       # Default options for Google's Gemini models with thinking capabilities
       {
-        model: "gemini-2.5-pro-preview-03-25", # Gemini 2.5 Pro Preview, supports thinking
+        model: "gemini-2.5-flash-preview-04-17", # Gemini 2.5 Flash Preview, supports thinking
         max_tokens: 20000
       }.freeze
     end
