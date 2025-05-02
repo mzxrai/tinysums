@@ -2,12 +2,12 @@
 # check=error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t hnsum .
-# docker run -d -p 80:3000 -e RAILS_MASTER_KEY=<value from config/master.key> --name hnsum hnsum
+# docker build -t tinysums .
+# docker run -d -p 80:3000 -e RAILS_MASTER_KEY=<value from config/master.key> --name tinysums tinysums
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version
+# Make sure RUBY_VERSION matches the Ruby version in .ruby-version and Gemfile
 ARG RUBY_VERSION=3.4.2
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
