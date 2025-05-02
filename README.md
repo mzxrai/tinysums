@@ -66,8 +66,6 @@ Before you begin, ensure you have the following installed:
     REDIS_URL=redis://<host>:<port>/<db_number>
     GOOG_GEM_API_KEY=your_google_ai_gemini_api_key
     PERP_API_KEY=your_perplexity_api_key
-
-    # Add any other required environment variables here
     ```
 
     * Replace placeholders (`<...>`) with your actual database and Redis connection details. Ensure the user specified in `DATABASE_URL` exists and has privileges on the `tinysums_development` database.
